@@ -28,9 +28,9 @@ import AdBanner from "./AdBanner.astro";
       </button>
     </div>
 
-    <div class="flex">
-      <!-- Base64 Encoded Ad Banner (Hidden from Crawlers) -->
-      <AdBanner type="300x250" />
+    <div class="flex justify-center max-w-full overflow-hidden">
+      <!-- Base64 Encoded Device-Adjustable Ad Banner -->
+      <AdBanner type="responsive" mobileType="320x50" desktopType="300x250" />
     </div>
   </div>
 </div>

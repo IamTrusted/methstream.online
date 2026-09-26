@@ -1,10 +1,17 @@
 ---
 interface Props {
-  type?: '300x250' | '320x50' | '160x600' | '160x300';
+  type?: 'responsive' | 'auto' | '300x250' | '320x50' | '160x600' | '160x300';
   class?: string;
+  mobileType?: '320x50' | '300x250';
+  desktopType?: '300x250' | '160x600';
 }
 
-const { type = '300x250', class: className = '' } = Astro.props;
+const {
+  type = 'responsive',
+  class: className = '',
+  mobileType = '320x50',
+  desktopType = '300x250',
+} = Astro.props;
 
 interface BannerConfig {
   width: number;
@@ -36,16 +43,28 @@ const BANNERS: Record<string, BannerConfig> = {
   },
 };
 
-const config = BANNERS[type] || BANNERS['300x250'];
+const isResponsive = type === 'responsive' || type === 'auto';
+const initialConfig = BANNERS[type] || BANNERS['300x250'];
+const mobileConfig = BANNERS[mobileType] || BANNERS['320x50'];
+const desktopConfig = BANNERS[desktopType] || BANNERS['300x250'];
 ---
 
 <div
-  class={`b64-ad-slot ${className}`}
-  data-ad={config.b64}
-  data-w={config.width}
-  data-h={config.height}
-  style={`min-width:${config.width}px;min-height:${config.height}px;display:flex;justify-content:center;align-items:center;`}
+  class={`b64-ad-slot-wrapper ${className}`}
+  data-ad-responsive={isResponsive ? 'true' : 'false'}
+  data-mobile-b64={mobileConfig.b64}
+  data-mobile-w={mobileConfig.width}
+  data-mobile-h={mobileConfig.height}
+  data-desktop-b64={desktopConfig.b64}
+  data-desktop-w={desktopConfig.width}
+  data-desktop-h={desktopConfig.height}
+  data-ad={initialConfig.b64}
+  data-w={initialConfig.width}
+  data-h={initialConfig.height}
+  style="width:100%;max-width:100%;display:flex;justify-content:center;align-items:center;overflow:hidden;margin:0 auto;box-sizing:border-box;"
 >
+  <div class="b64-ad-scaler" style="display:flex;justify-content:center;align-items:center;max-width:100%;transform-origin:center center;transition:transform 0.15s ease-out;">
+  </div>
 </div>
 
 <script is:inline>
@@ -71,13 +90,40 @@ const config = BANNERS[type] || BANNERS['300x250'];
       return false;
     }
 
-    function renderSlot(el) {
-      if (el.getAttribute('data-ad-loaded')) return;
-      el.setAttribute('data-ad-loaded', 'true');
-      var b64 = el.getAttribute('data-ad');
+    function renderSlot(wrapper) {
+      if (wrapper.getAttribute('data-ad-loaded')) {
+        adjustScale(wrapper);
+        return;
+      }
+
+      var isResp = wrapper.getAttribute('data-ad-responsive') === 'true';
+      var isMobile = window.innerWidth < 640;
+
+      var b64, w, h;
+      if (isResp) {
+        if (isMobile) {
+          b64 = wrapper.getAttribute('data-mobile-b64');
+          w = wrapper.getAttribute('data-mobile-w');
+          h = wrapper.getAttribute('data-mobile-h');
+        } else {
+          b64 = wrapper.getAttribute('data-desktop-b64');
+          w = wrapper.getAttribute('data-desktop-w');
+          h = wrapper.getAttribute('data-desktop-h');
+        }
+      } else {
+        b64 = wrapper.getAttribute('data-ad');
+        w = wrapper.getAttribute('data-w') || '300';
+        h = wrapper.getAttribute('data-h') || '250';
+      }
+
       if (!b64) return;
-      var w = el.getAttribute('data-w') || '300';
-      var h = el.getAttribute('data-h') || '250';
+      wrapper.setAttribute('data-ad-loaded', 'true');
+      wrapper.setAttribute('data-current-w', w);
+      wrapper.setAttribute('data-current-h', h);
+
+      var scaler = wrapper.querySelector('.b64-ad-scaler');
+      if (!scaler) return;
+
       try {
         var html = atob(b64);
         var iframe = document.createElement('iframe');
@@ -90,7 +136,7 @@ const config = BANNERS[type] || BANNERS['300x250'];
         iframe.scrolling = 'no';
         iframe.setAttribute('frameborder', '0');
         iframe.setAttribute('allowtransparency', 'true');
-        el.appendChild(iframe);
+        scaler.appendChild(iframe);
 
         var doc = iframe.contentWindow || iframe.contentDocument;
         if (doc && doc.document) doc = doc.document;
@@ -99,26 +145,61 @@ const config = BANNERS[type] || BANNERS['300x250'];
           doc.write('<!DOCTYPE html><html><head><base target="_blank"><style>body{margin:0;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;}</style></head><body>' + html + '</body></html>');
           doc.close();
         }
+
+        adjustScale(wrapper);
       } catch (e) {
         console.error('Ad render error', e);
       }
     }
 
+    // Dynamically adjusts scale so banners never overflow any mobile or tablet screen
+    function adjustScale(wrapper) {
+      var scaler = wrapper.querySelector('.b64-ad-scaler');
+      if (!scaler) return;
+
+      var currentW = parseInt(wrapper.getAttribute('data-current-w') || '300', 10);
+      var currentH = parseInt(wrapper.getAttribute('data-current-h') || '250', 10);
+
+      var containerW = wrapper.parentElement ? wrapper.parentElement.clientWidth : wrapper.clientWidth;
+      if (!containerW || containerW <= 0) {
+        containerW = window.innerWidth - 16;
+      }
+
+      if (containerW < currentW) {
+        var ratio = Math.max(0.65, containerW / currentW);
+        scaler.style.transform = 'scale(' + ratio + ')';
+        wrapper.style.height = Math.round(currentH * ratio) + 'px';
+      } else {
+        scaler.style.transform = 'none';
+        wrapper.style.height = currentH + 'px';
+      }
+    }
+
     function initBanners() {
       if (isCrawler()) return;
-      var slots = document.querySelectorAll('.b64-ad-slot[data-ad]');
+      var slots = document.querySelectorAll('.b64-ad-slot-wrapper');
       slots.forEach(renderSlot);
     }
 
+    function handleResize() {
+      var slots = document.querySelectorAll('.b64-ad-slot-wrapper[data-ad-loaded="true"]');
+      slots.forEach(adjustScale);
+    }
+
+    var resizeTimer = null;
+    window.addEventListener('resize', function() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(handleResize, 150);
+    });
+
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(initBanners, 300);
+        setTimeout(initBanners, 200);
       });
     } else {
-      setTimeout(initBanners, 300);
+      setTimeout(initBanners, 200);
     }
 
     document.addEventListener('astro:page-load', initBanners);
   })();
 </script>
-
