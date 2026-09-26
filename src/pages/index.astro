@@ -1,0 +1,1321 @@
+---
+import Layout from "../layouts/Layout.astro";
+import slugify from "../utils/slugify";
+import translateTeam from "../utils/translateTeams";
+import { fetchSports, fetchMatches, ENDPOINTS } from "../utils/api";
+import AdBanner from "../components/ads/AdBanner.astro";
+
+interface APIMatch {
+    id: string;
+    title: string;
+    category: string;
+    date: number;
+    poster?: string;
+    popular: boolean;
+    teams?: {
+        home?: {
+            name: string;
+            badge: string;
+        },
+        away?: {
+            name: string;
+            badge: string;
+        }
+    };
+    sources: {
+        source: string;
+        id: string;
+    }[];
+}
+
+interface Sport {
+    id: string;
+    name: string;
+}
+
+// Fallback sports data with sample matches if API fails
+const now = Date.now();
+const fallbackSports = [
+  {
+    sport_id: 'football',
+    sport: 'Soccer',
+    league_schedule: [
+      { id: '1', title: 'Real Madrid vs Barcelona', category: 'football', date: now, popular: true },
+      { id: '2', title: 'Manchester United vs Liverpool', category: 'football', date: now + 3600000, popular: true },
+      { id: '3', title: 'Bayern Munich vs Borussia Dortmund', category: 'football', date: now + 7200000, popular: true },
+      { id: '4', title: 'Juventus vs Inter Milan', category: 'football', date: now + 86400000, popular: true }
+    ]
+  },
+  {
+    sport_id: 'basketball',
+    sport: 'Basketball',
+    league_schedule: [
+      { id: '6', title: 'Celtics vs Heat', category: 'basketball', date: now, popular: true },
+      { id: '7', title: 'Bulls vs Knicks', category: 'basketball', date: now + 86400000, popular: true }
+    ]
+  },
+  {
+    sport_id: 'cricket',
+    sport: 'Cricket',
+    league_schedule: [
+      { id: '17', title: 'Australia vs England', category: 'cricket', date: now, popular: true },
+      { id: '18', title: 'South Africa vs India', category: 'cricket', date: now + 86400000, popular: true }
+    ]
+  },
+  {
+    sport_id: 'american-football',
+    sport: 'American Football',
+    league_schedule: [
+      { id: '26', title: 'Ravens vs Bengals', category: 'american-football', date: now, popular: true },
+      { id: '29', title: 'Seahawks vs Cardinals', category: 'american-football', date: now + 86400000, popular: true }
+    ]
+  }
+];
+
+let allSports = [];
+
+try {
+  const [sportsData, matchesData] = await Promise.all([
+    fetchSports(),
+    fetchMatches('all') // Use 'all' or 'today' as needed
+  ]);
+
+  if (sportsData.length > 0) {
+    // Filter matches for next 7 days (plus 24/7 channels like Rally TV with date 0)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7); // Show matches for next 7 days
+
+    const filteredMatches = matchesData.filter(m => {
+      // 24/7 channels like Rally TV have date: 0 or undefined -> ALWAYS keep them
+      if (!m.date || m.date === 0) return true;
+      const matchDate = new Date(m.date);
+      return matchDate >= today && matchDate < nextWeek;
+    });
+
+
+    // Extract LIVE matches (including 24/7 live channels)
+    const liveMatches = matchesData.filter(m => {
+      if (!m.date || m.date === 0) return true; // 24/7 channels are continuously live
+      const matchTime = m.date;
+      const nowTime = Date.now();
+      // Match is live if it started in the last 2.5 hours and is not in the future
+      return nowTime >= matchTime && nowTime <= (matchTime + 9000000); 
+    });
+
+    // Group matches by category
+    const groupedMatches = sportsData.map(sport => {
+      // For buttons grid: check if there are ANY matches for this sport in the full list
+      const hasAnyMatchesInAPI = matchesData.some(m => m.category === sport.id);
+      
+      // For matches list: only the filtered ones
+      const sportMatches = filteredMatches.filter(m => m.category === sport.id);
+      
+      return {
+        sport: sport.name,
+        sport_id: sport.id,
+        league_schedule: sportMatches,
+        isVisibleInGrid: hasAnyMatchesInAPI
+      };
+    }).filter(s => s.isVisibleInGrid);
+
+    // Create a special LIVE category if there are live matches
+    const liveCategory = {
+      sport: 'LIVE',
+      sport_id: 'live',
+      league_schedule: liveMatches,
+      isVisibleInGrid: liveMatches.length > 0
+    };
+
+    // Move Football to the top, then others, then LIVE at the end
+    const footballIdx = groupedMatches.findIndex(s => s.sport_id === 'football');
+    let finalSports = [];
+    
+    if (footballIdx > -1) {
+      const football = groupedMatches.splice(footballIdx, 1)[0];
+      finalSports.push(football);
+    }
+
+    // Add remaining sports
+    finalSports = [...finalSports, ...groupedMatches];
+
+    // Add LIVE at the end if it exists
+    if (liveCategory.isVisibleInGrid) {
+      finalSports.push(liveCategory);
+    }
+    
+    allSports = finalSports;
+  }
+} catch (error) {
+  console.error("Error fetching schedule:", error);
+}
+
+// If no sports from API, use fallback
+if (allSports.length === 0) {
+  console.log("Using fallback sports data");
+  allSports = fallbackSports;
+} else {
+  console.log("Using API sports data");
+}
+
+const SHOW_ADS = import.meta.env.SHOW_ADS === "true";
+
+const sportIcons = {
+  football: "⚽",
+  soccer: "⚽",
+  basketball: "🏀",
+  baseball: "⚾",
+  hockey: "🏒",
+  "ice-hockey": "🏒",
+  mma: "🥋",
+  boxing: "🥊",
+  tennis: "🎾",
+  cricket: "🏏",
+  live: "🔴",
+  rugby: "🏉",
+  "rugby-league": "🏉",
+  "rugby-union": "🏉",
+  volleyball: "🏐",
+  motorsports: "🏎️",
+  "motor-sports": "🏎️",
+  "motor sports": "🏎️",
+  motosports: "🏎️",
+  f1: "🏎️",
+  fight: "🥊",
+  "fight-ufc-boxing": "🥊",
+  "fight (ufc, boxing)": "🥊",
+  ufc: "🥋",
+  american: "🏈",
+  "american-football": "🏈",
+  americanfootball: "🏈",
+  afl: "🏉",
+  nfl: "🏈",
+  nba: "🏀",
+  nhl: "🏒",
+  mlb: "⚾",
+  golf: "⛳",
+  snooker: "🎱",
+  darts: "🎯",
+  handball: "🤞",
+  cycling: "🚴",
+  swimming: "🏊",
+  athletics: "🏃",
+  other: "🏅",
+  others: "🏅",
+};
+
+export const prerender = false;
+
+const translateSportsData = (str: string) => {
+  if (!str) return str;
+  const translations: { [key: string]: string } = {
+    'Football': 'Football',
+    'Basketball': 'Basketball',
+    'Baseball': 'Baseball',
+    'Hockey': 'Hockey',
+    'Tennis': 'Tennis',
+    'MMA': 'MMA',
+    'Boxing': 'Boxing',
+    'Motorsports': 'Motorsports',
+    'Motor Sports': 'Motorsports',
+    'American Football': 'American Football',
+    'Fight (UFC, Boxing)': 'Fight (UFC, Boxing)',
+    'Rugby': 'Rugby',
+    'Cricket': 'Cricket',
+    'Volleyball': 'Volleyball',
+    'Golf': 'Golf',
+    'Snooker': 'Snooker',
+    'Darts': 'Darts'
+  };
+  return translations[str] || str;
+};
+
+const formatDateEnglish = (date: Date) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  const dayName = days[date.getDay()];
+  const day = date.getDate().toString().padStart(2, '0');
+  const monthName = months[date.getMonth()];
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  
+  return `${dayName}, ${monthName} ${day} - ${hours}:${minutes}`;
+};
+---
+
+<Layout
+title="Methstreams - Best Buffstreams & Crackstreams HD Live"
+description="Watch live sports in HD on Methstreams, the best Buffstreams & Crackstreams alternative. Stream NFL, NBA, UFC, Premier League & MLB with no signup."
+keywords="methstreams, best buffstreams & crackstreams, buffstreams, crackstreams, methstreams alternative, best buffstreams alternative, crackstreams alternative, free live sports streaming, watch sports hd free"
+>
+
+  <!-- SEO: H1 for SEO & indexing -->
+  <h1 class="sr-only">Methstreams - Best Buffstreams & Crackstreams Alternative | Free HD Live Sports Streams</h1>
+
+  <!-- Right Side Ads -->
+  <div id="homepage-right-ad" class="fixed right-2 top-1/2 -translate-y-1/2 z-50 hidden 2xl:block">
+    <button 
+      onclick="document.getElementById('homepage-right-ad').style.display='none'"
+      class="absolute -top-8 right-0 bg-red-500 text-white text-xs px-2 py-1 rounded-t-md font-bold shadow-lg"
+    >
+      Close ×
+    </button>
+    <div class="flex flex-col gap-3 items-end"></div>
+  </div>
+
+
+  <!-- Desktop: 300x250 fixed left -->
+  <div id="homepage-left-ad" class="fixed left-2 top-1/2 -translate-y-1/2 z-50 hidden xl:block">
+    <button 
+      onclick="document.getElementById('homepage-left-ad').style.display='none'"
+      class="absolute -top-8 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded-t-md font-bold shadow-lg"
+    >
+      Close ×
+    </button>
+    <div class="theme-card p-1 rounded shadow-2xl border border-[var(--border-color)]">
+      <AdBanner type="300x250" />
+    </div>
+  </div>
+
+  <!-- Mobile: ads before sports buttons -->
+  <div class="xl:hidden w-full px-2 sm:px-4 mb-6 space-y-4">
+    <div class="flex justify-center">
+      <div class="theme-card p-1 rounded shadow-2xl border border-[var(--border-color)] overflow-hidden max-w-full">
+        <AdBanner type="300x250" />
+      </div>
+    </div>
+    <div class="flex justify-center">
+      <div class="theme-card p-2 rounded border border-[var(--border-color)] shadow-sm overflow-hidden max-w-full">
+        <AdBanner type="320x50" />
+      </div>
+    </div>
+  </div>
+
+   <!-- Match Card Styles -->
+   <style>
+     /* ── Section header pills ── */
+     .mc-live-pill {
+       display: inline-flex;
+       align-items: center;
+       gap: 5px;
+       background: linear-gradient(135deg, rgba(239,68,68,0.22), rgba(239,68,68,0.1));
+       border: 1px solid rgba(239,68,68,0.45);
+       color: #ef4444;
+       font-size: 9px;
+       font-weight: 900;
+       letter-spacing: 0.12em;
+       padding: 3px 9px;
+       border-radius: 20px;
+       text-transform: uppercase;
+       box-shadow: 0 0 12px rgba(239,68,68,0.25);
+       animation: pill-breathe 2s ease-in-out infinite;
+     }
+     @keyframes pill-breathe {
+       0%,100% { box-shadow: 0 0 8px rgba(239,68,68,0.2); }
+       50%      { box-shadow: 0 0 18px rgba(239,68,68,0.45); }
+     }
+     .mc-soon-pill {
+       display: inline-flex;
+       align-items: center;
+       background: rgba(59,130,246,0.14);
+       border: 1px solid rgba(59,130,246,0.35);
+       color: #60a5fa;
+       font-size: 9px;
+       font-weight: 900;
+       letter-spacing: 0.1em;
+       padding: 3px 9px;
+       border-radius: 20px;
+       text-transform: uppercase;
+     }
+     .mc-live-dot-sm {
+       display: inline-block;
+       width: 6px;
+       height: 6px;
+       background: #ef4444;
+       border-radius: 50%;
+       box-shadow: 0 0 6px rgba(239,68,68,0.8);
+       animation: sm-dot-pulse 1.4s ease-in-out infinite;
+       flex-shrink: 0;
+     }
+     @keyframes sm-dot-pulse {
+       0%,100% { transform: scale(1);    opacity: 1; }
+       50%      { transform: scale(1.4); opacity: 0.7; }
+     }
+
+     /* ── Match card premium ── */
+     .match-card-premium {
+       display: block;
+       position: relative;
+       background: linear-gradient(145deg,
+         rgba(30, 41, 59, 0.6) 0%,
+         rgba(15, 23, 42, 0.8) 100%);
+       border: 1px solid rgba(59, 130, 246, 0.16);
+       border-radius: 16px;
+       padding: 14px 16px;
+       margin-bottom: 9px;
+       text-decoration: none;
+       overflow: hidden;
+       transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+       box-shadow:
+         0 4px 20px rgba(0,0,0,0.5),
+         inset 0 1px 1px rgba(255,255,255,0.08);
+       backdrop-filter: blur(8px);
+      }
+     .match-card-premium::before {
+       content: '';
+       position: absolute;
+       top: 0; left: 0;
+       width: 100%; height: 3px;
+       background: linear-gradient(90deg,
+         #3b82f6 0%,
+         #06b6d4 100%);
+       opacity: 0;
+       transition: all 0.3s ease;
+       transform: scaleX(0);
+       transform-origin: left;
+     }
+     .match-card-premium:hover::before { 
+       opacity: 1; 
+       transform: scaleX(1);
+     }
+     .match-card-premium:hover {
+       transform: translateY(-3px);
+       border-color: rgba(59, 130, 246, 0.45);
+       box-shadow:
+         0 0 0 1px rgba(59, 130, 246, 0.3),
+         0 14px 35px rgba(0,0,0,0.55),
+         0 0 25px rgba(59, 130, 246, 0.18);
+     }
+
+     /* top bar */
+     .mc-top-bar {
+       display: flex;
+       align-items: center;
+       justify-content: space-between;
+       margin-bottom: 10px;
+     }
+     .mc-live-indicator {
+       display: flex;
+       align-items: center;
+       gap: 5px;
+     }
+     .mc-live-label {
+       font-size: 9px;
+       font-weight: 900;
+       letter-spacing: 0.14em;
+       color: #ef4444;
+       text-transform: uppercase;
+       text-shadow: 0 0 8px rgba(239,68,68,0.6);
+       animation: live-text-flicker 3s ease-in-out infinite;
+     }
+     @keyframes live-text-flicker {
+       0%,90%,100% { opacity: 1; }
+       92%          { opacity: 0.6; }
+       94%          { opacity: 1; }
+       96%          { opacity: 0.7; }
+     }
+     .mc-date {
+       font-size: 9px;
+       font-weight: 600;
+       color: rgba(255,255,255,0.35);
+       letter-spacing: 0.04em;
+       text-transform: uppercase;
+     }
+
+     /* teams row */
+     .mc-teams-row {
+       display: grid;
+       grid-template-columns: 1fr auto 1fr;
+       align-items: center;
+       gap: 8px;
+     }
+     .mc-team {
+       display: flex;
+       align-items: center;
+       gap: 8px;
+       min-width: 0;
+     }
+     .mc-team-home { justify-content: flex-start; }
+     .mc-team-away { justify-content: flex-end; }
+
+     .mc-badge-wrap {
+       flex-shrink: 0;
+       width: 36px; height: 36px;
+       display: flex; align-items: center; justify-content: center;
+       background: rgba(255,255,255,0.05);
+       border-radius: 10px;
+       border: 1px solid rgba(255,255,255,0.08);
+       overflow: hidden;
+       transition: transform 0.3s ease, box-shadow 0.3s ease;
+     }
+     .match-card-premium:hover .mc-badge-wrap {
+       transform: scale(1.08);
+       box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+     }
+     .mc-badge-img {
+       width: 28px; height: 28px;
+       object-fit: contain;
+     }
+     .mc-badge-fallback {
+       font-size: 1.2rem;
+       line-height: 1;
+     }
+     .mc-team-name {
+       font-size: 11px;
+       font-weight: 800;
+       color: rgba(255,255,255,0.9);
+       line-height: 1.25;
+       overflow: hidden;
+       word-break: break-word;
+       transition: color 0.25s ease;
+     }
+     .match-card-premium:hover .mc-team-name { color: #fff; }
+     @media (min-width: 640px) {
+       .mc-team-name  { font-size: 15px; }
+       .mc-badge-wrap { width: 46px; height: 46px; }
+       .mc-badge-img  { width: 36px; height: 36px; }
+     }
+
+     /* center: VS + time + button */
+     .mc-center {
+       display: flex;
+       flex-direction: column;
+       align-items: center;
+       gap: 5px;
+       flex-shrink: 0;
+     }
+     .mc-vs-wrap {
+       width: 32px; height: 32px;
+       display: flex; align-items: center; justify-content: center;
+       background: linear-gradient(135deg, rgba(59,130,246,0.16), rgba(59,130,246,0.04));
+       border: 1px solid rgba(59,130,246,0.25);
+       border-radius: 50%;
+       transition: all 0.3s ease;
+     }
+     .match-card-premium:hover .mc-vs-wrap {
+       background: linear-gradient(135deg, rgba(59,130,246,0.3), rgba(59,130,246,0.12));
+       border-color: rgba(59,130,246,0.55);
+       box-shadow: 0 0 14px rgba(59,130,246,0.3);
+     }
+     .mc-vs {
+       font-size: 8px;
+       font-weight: 900;
+       color: #60a5fa;
+       letter-spacing: 0.05em;
+     }
+     .mc-time {
+       font-size: 9px;
+       font-weight: 700;
+       color: rgba(255,255,255,0.4);
+       letter-spacing: 0.06em;
+       text-transform: uppercase;
+       text-align: center;
+     }
+     .mc-watch-btn {
+       display: inline-flex;
+       align-items: center;
+       gap: 4px;
+       background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(37,99,235,0.08));
+       border: 1px solid rgba(59,130,246,0.3);
+       color: #93c5fd;
+       font-size: 8px;
+       font-weight: 900;
+       letter-spacing: 0.08em;
+       text-transform: uppercase;
+       padding: 4px 10px;
+       border-radius: 20px;
+       white-space: nowrap;
+       transition: all 0.25s ease;
+     }
+     .match-card-premium:hover .mc-watch-btn {
+       background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+       border-color: #60a5fa;
+       color: #ffffff;
+       box-shadow: 0 0 16px rgba(59,130,246,0.55), 0 3px 10px rgba(0,0,0,0.4);
+       transform: scale(1.05);
+     }
+     @media (min-width: 640px) {
+       .mc-watch-btn { font-size: 9px; padding: 5px 14px; }
+       .mc-vs-wrap   { width: 40px; height: 40px; }
+       .mc-vs        { font-size: 9px; }
+       .mc-time      { font-size: 10px; }
+     }
+   </style>
+   <!-- Sports Grid Section -->
+   <style>
+     /* ── Base card ── */
+     .sport-card {
+       position: relative;
+       display: flex;
+       flex-direction: column;
+       align-items: center;
+       justify-content: center;
+       padding: 10px 6px;
+       border-radius: 16px;
+       transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), border-color 0.2s ease, box-shadow 0.2s ease;
+       border: 1px solid rgba(59,130,246,0.18);
+       background: #0d1527;
+       overflow: hidden;
+       cursor: pointer;
+       aspect-ratio: 1;
+       text-decoration: none;
+       will-change: transform;
+       box-shadow: 0 4px 15px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+     }
+
+     /* top-left shine */
+     .sport-card::before {
+       content: '';
+       position: absolute;
+       top: 0; left: 0;
+       width: 60%; height: 40%;
+       background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 100%);
+       border-radius: 16px 0 100% 0;
+       pointer-events: none;
+     }
+
+     /* hover shimmer overlay */
+     .sport-card::after {
+       content: '';
+       position: absolute;
+       inset: 0;
+       background: linear-gradient(135deg,
+         rgba(255,255,255,0.08) 0%,
+         transparent 50%,
+         rgba(59,130,246,0.08) 100%);
+       opacity: 0;
+       transition: opacity 0.3s ease;
+       pointer-events: none;
+       border-radius: inherit;
+     }
+     .sport-card:hover::after { opacity: 1; }
+
+     .sport-card:hover {
+       transform: translateY(-7px) scale(1.06);
+       border-color: rgba(59,130,246,0.5);
+       box-shadow:
+         0 0 0 1px rgba(59,130,246,0.3),
+         0 16px 40px rgba(0,0,0,0.65),
+         0 0 20px rgba(59,130,246,0.2);
+     }
+
+     /* ── Active (electric blue theme) ── */
+     .sport-card.active {
+       background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+       border-color: rgba(96,165,250,0.6);
+       box-shadow:
+         0 0 0 2px rgba(59,130,246,0.4),
+         0 8px 28px rgba(0,0,0,0.5),
+         0 0 20px rgba(59,130,246,0.3),
+         inset 0 1px 0 rgba(255,255,255,0.2);
+       transform: scale(1.05);
+     }
+     .sport-card.active:hover {
+       transform: translateY(-5px) scale(1.1);
+       box-shadow:
+         0 0 0 2px rgba(96,165,250,0.7),
+         0 20px 50px rgba(0,0,0,0.65),
+         0 0 25px rgba(59,130,246,0.45);
+     }
+
+     /* ── Icon ── */
+     .sport-icon {
+       font-size: 1.9rem;
+       display: block;
+       text-align: center;
+       transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.32s ease;
+       filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+       line-height: 1;
+       will-change: transform;
+     }
+     .sport-card:hover .sport-icon {
+       transform: translateY(-4px) scale(1.22) rotate(-5deg);
+       filter: drop-shadow(0 6px 18px rgba(59,130,246,0.7));
+     }
+     .sport-card.active .sport-icon {
+       filter: drop-shadow(0 0 10px rgba(255,255,255,0.5));
+     }
+
+     /* ── Label ── */
+     .sport-label {
+       font-size: 8.5px;
+       font-weight: 900;
+       text-transform: uppercase;
+       letter-spacing: 0.05em;
+       text-align: center;
+       line-height: 1.2;
+       margin-top: 5px;
+       word-break: break-word;
+       padding: 0 2px;
+       color: rgba(255,255,255,0.85);
+       transition: color 0.25s ease, letter-spacing 0.25s ease;
+     }
+     .sport-card:hover .sport-label {
+       color: #fff;
+       letter-spacing: 0.07em;
+     }
+     .sport-card.active .sport-label { color: #ffffff; }
+
+     /* ── Active dot ── */
+     .sport-active-dot {
+       position: absolute;
+       bottom: 5px;
+       width: 4px;
+       height: 4px;
+       background: #60a5fa;
+       border-radius: 50%;
+       animation: pulse-dot 1.6s ease-in-out infinite;
+     }
+     @keyframes pulse-dot {
+       0%, 100% { transform: scale(1); opacity: 0.9; box-shadow: 0 0 6px rgba(96,165,250,0.8); }
+       50%       { transform: scale(1.8); opacity: 0.5; box-shadow: 0 0 12px rgba(96,165,250,0.4); }
+     }
+
+     /* ── Cyber blue glow ring (hover) ── */
+     .sport-glow-ring {
+       position: absolute;
+       inset: -2px;
+       border-radius: 18px;
+       background: conic-gradient(from 0deg,
+         #3b82f6, #60a5fa, #2563eb, #0284c7, #38bdf8, #3b82f6);
+       opacity: 0;
+       transition: opacity 0.3s ease;
+       z-index: -1;
+     }
+     .sport-card:hover .sport-glow-ring { opacity: 0.5; }
+     .sport-card.active .sport-glow-ring { opacity: 0.75; }
+
+     /* ── LIVE card special ── */
+     .sport-card.live-card {
+       border-color: rgba(239, 68, 68, 0.35);
+       background: linear-gradient(160deg,
+         rgba(239,68,68,0.12) 0%,
+         rgba(239,68,68,0.04) 100%);
+       box-shadow:
+         0 0 0 1px rgba(239,68,68,0.2),
+         0 4px 20px rgba(239,68,68,0.15),
+         inset 0 1px 0 rgba(255,100,100,0.1);
+       animation: live-breathe 2.5s ease-in-out infinite;
+     }
+     .sport-card.live-card:hover {
+       border-color: rgba(239,68,68,0.7);
+       box-shadow:
+         0 0 0 1.5px rgba(239,68,68,0.5),
+         0 16px 40px rgba(239,68,68,0.35),
+         0 0 30px rgba(239,68,68,0.2);
+       transform: translateY(-7px) scale(1.07);
+     }
+     @keyframes live-breathe {
+       0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,0.2), 0 4px 20px rgba(239,68,68,0.12); }
+       50%       { box-shadow: 0 0 0 2px rgba(239,68,68,0.4), 0 4px 28px rgba(239,68,68,0.28), 0 0 16px rgba(239,68,68,0.15); }
+     }
+     .sport-card.live-card .sport-glow-ring {
+       background: conic-gradient(from 0deg, #ef4444, #f97316, #ef4444, #dc2626, #ef4444);
+     }
+     /* Replace emoji with a pulsing red dot for LIVE */
+     .live-dot-wrap {
+       position: relative;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       width: 36px;
+       height: 36px;
+     }
+     .live-dot {
+       width: 14px;
+       height: 14px;
+       background: radial-gradient(circle at 35% 35%, #ff6b6b, #dc2626);
+       border-radius: 50%;
+       box-shadow: 0 0 8px rgba(239,68,68,0.7), 0 0 20px rgba(239,68,68,0.3);
+       animation: live-pulse 1.4s ease-in-out infinite;
+       position: relative;
+       z-index: 1;
+     }
+     .live-dot::after {
+       content: '';
+       position: absolute;
+       inset: -4px;
+       border-radius: 50%;
+       border: 2px solid rgba(239,68,68,0.5);
+       animation: live-ring 1.4s ease-out infinite;
+     }
+     .live-dot-ring2 {
+       position: absolute;
+       inset: -10px;
+       border-radius: 50%;
+       border: 1.5px solid rgba(239,68,68,0.25);
+       animation: live-ring 1.4s ease-out 0.35s infinite;
+     }
+     @keyframes live-pulse {
+       0%, 100% { transform: scale(1);    box-shadow: 0 0 6px rgba(239,68,68,0.7), 0 0 16px rgba(239,68,68,0.3); }
+       50%       { transform: scale(1.12); box-shadow: 0 0 12px rgba(239,68,68,0.9), 0 0 28px rgba(239,68,68,0.5); }
+     }
+     @keyframes live-ring {
+       0%   { transform: scale(0.6); opacity: 0.8; }
+       100% { transform: scale(2.4); opacity: 0; }
+     }
+     .live-badge {
+       position: absolute;
+       top: 4px;
+       right: 4px;
+       background: linear-gradient(135deg, #ef4444, #dc2626);
+       color: #fff;
+       font-size: 6px;
+       font-weight: 900;
+       letter-spacing: 0.08em;
+       padding: 1.5px 4px;
+       border-radius: 4px;
+       line-height: 1.4;
+       box-shadow: 0 1px 6px rgba(239,68,68,0.6);
+       animation: badge-blink 2s ease-in-out infinite;
+     }
+     @keyframes badge-blink {
+       0%, 100% { opacity: 1; }
+       50%       { opacity: 0.65; }
+     }
+
+     /* ── Section title ── */
+     .sports-section-title {
+       font-size: 10px;
+       font-weight: 800;
+       text-transform: uppercase;
+       letter-spacing: 0.2em;
+       color: rgba(255,255,255,0.3);
+       margin-bottom: 12px;
+       padding-left: 2px;
+     }
+     @media (min-width: 640px) {
+       .sport-icon { font-size: 2.2rem; }
+       .sport-label { font-size: 9.5px; }
+       .live-dot { width: 16px; height: 16px; }
+       .live-dot-wrap { width: 42px; height: 42px; }
+     }
+   </style>
+
+   <div class="w-full px-2 sm:px-4 mb-12">
+     <div class="mx-auto max-w-4xl">
+       <p class="sports-section-title">Browse by Sport</p>
+       <div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-3">
+          {allSports
+            .map((sport, index) => {
+           const icon = sportIcons[sport.sport_id] || "🏆";
+           const isActive = index === 0;
+           const isLive = sport.sport_id === 'live';
+           return (
+             <a
+               href={`#${slugify(sport.sport)}`}
+               class={`sport-card sport-filter-btn ${isActive ? 'active' : ''} ${isLive ? 'live-card' : ''}`}
+             >
+               <div class="sport-glow-ring"></div>
+               {isLive ? (
+                 <div class="live-dot-wrap">
+                   <div class="live-dot"></div>
+                   <div class="live-dot-ring2"></div>
+                 </div>
+               ) : (
+                 <span class="sport-icon">{icon}</span>
+               )}
+               <span class="sport-label">{sport.sport}</span>
+               {isLive && <span class="live-badge">LIVE</span>}
+               {isActive && <div class="sport-active-dot"></div>}
+             </a>
+           );
+         })}
+       </div>
+      </div>
+    </div>
+
+    <!-- Discord Community Banner below Sports Buttons -->
+    <div class="w-full px-2 sm:px-4 mb-8">
+      <div class="mx-auto max-w-4xl">
+        <a
+          href="https://discord.com/invite/Q2juzbcww"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group relative block overflow-hidden rounded-2xl p-4 sm:p-5 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/25 hover:-translate-y-0.5"
+          style="background: linear-gradient(135deg, #5865F2 0%, #404EED 60%, #3540c4 100%); border: 1px solid rgba(255, 255, 255, 0.15);"
+        >
+          <!-- Subtle background Discord watermark -->
+          <div class="absolute -right-6 -bottom-6 opacity-10 pointer-events-none group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500">
+            <svg class="w-40 h-40 fill-white" viewBox="0 0 127.14 96.36">
+              <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+            </svg>
+          </div>
+
+          <div class="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3.5 text-center sm:text-left">
+              <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20 shadow-inner group-hover:scale-105 transition-transform duration-300">
+                <svg class="w-7 h-7 fill-white" viewBox="0 0 127.14 96.36">
+                  <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+                </svg>
+              </div>
+              <div>
+                <div class="flex items-center justify-center sm:justify-start gap-2 mb-0.5">
+                  <h3 class="text-white font-extrabold text-base sm:text-lg tracking-tight">Discord Support & Live Updates</h3>
+                  <span class="inline-flex items-center gap-1.5 bg-[#23a55a]/20 border border-[#23a55a]/40 text-[#23a55a] text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    <span class="relative flex h-2 w-2">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#23a55a] opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-2 w-2 bg-[#23a55a]"></span>
+                    </span>
+                    ONLINE
+                  </span>
+                </div>
+                <p class="text-white/85 text-xs sm:text-sm font-medium">Join our official community for fast stream links, backup servers & 24/7 help</p>
+              </div>
+            </div>
+
+            <div class="shrink-0 w-full sm:w-auto">
+              <span class="flex items-center justify-center gap-2 bg-white hover:bg-white/95 text-[#5865F2] font-black text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-lg group-hover:scale-105 transition-all duration-200">
+                <span>Join Discord</span>
+                <svg class="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                </svg>
+              </span>
+            </div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Description below sports buttons -->
+    <div class="w-full px-2 sm:px-4 mb-8">
+      <div class="mx-auto max-w-4xl">
+        <div class="text-center py-5 px-6 rounded-2xl relative overflow-hidden backdrop-blur-md" style="background:linear-gradient(135deg,rgba(59,130,246,0.12),rgba(6,182,212,0.05));border:1px solid rgba(59,130,246,0.3);box-shadow:0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.1);">
+          <div class="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-blue-400 to-transparent"></div>
+          <p class="text-[13px] sm:text-sm font-semibold" style="color:rgba(255,255,255,0.8);line-height:1.8;">
+            <span class="bg-gradient-to-r from-blue-400 to-sky-300 bg-clip-text text-transparent" style="font-weight:900;font-size:16px;letter-spacing:0.02em;">Methstreams</span>
+            &mdash; The <strong class="text-blue-400 font-extrabold">Best Buffstreams &amp; Crackstreams</strong> Alternative for Free HD Live Sports
+            <br />
+            Welcome to <strong class="text-white font-black">Methstreams</strong>, the web's leading free sports streaming platform. If you are searching for the <strong class="text-sky-300 font-bold">best Buffstreams &amp; Crackstreams</strong> alternative with high-speed multi-server feeds, zero sign-up friction, and ultra-reliable 1080p 60fps broadcasts, you have arrived at the right place. Stream NFL, NBA, UFC, Premier League soccer, MLB, NHL, Formula 1, and boxing seamlessly across mobile, PC, and Smart TVs.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ad Banner Below Sports Buttons (desktop only) -->
+    <div class="hidden xl:flex justify-center mb-8 px-2">
+      <div class="theme-card p-2 rounded border border-[var(--border-color)] shadow-sm overflow-hidden max-w-full">
+        <AdBanner type="320x50" />
+      </div>
+    </div>
+
+     <div class="mx-auto mb-4 max-w-4xl">
+    <div class="mx-3 space-y-8">
+      <!-- Ads and other content continue here -->
+
+<div class="theme-card rounded-xl p-4 shadow-xl border backdrop-blur-sm">
+      <div id="no-matches-found" class="hidden py-10 text-center theme-text-secondary">
+        <div class="text-4xl mb-4">🔍</div>
+        <p class="text-lg font-bold">No matches found matching your search.</p>
+        <p class="text-sm">Try searching for another team or tournament.</p>
+      </div>
+      {
+        allSports.map((sport : any) => {
+            return (
+              <div class="mb-12 last:mb-0 sport-section" id={slugify(sport.sport)}>
+                <div class="flex items-center gap-3 mb-6 border-b border-[var(--border-color)] pb-2">
+                  <h2 class="text-2xl font-black theme-text-primary uppercase tracking-wider">
+                    {sport.sport}
+                  </h2>
+                  {sport.league_schedule.length > 0 ? (
+                    <span class="mc-live-pill">
+                      <span class="mc-live-dot-sm"></span>
+                      LIVE
+                    </span>
+                  ) : (
+                    <span class="mc-soon-pill">Coming Soon</span>
+                  )}
+                </div>
+            
+
+{sport.league_schedule.length > 0 ? (
+<div class="flex flex-col gap-3 mt-4">
+  {sport.league_schedule.map((event: APIMatch) => {
+    const hasVs = event.title && event.title.includes(' vs ');
+    const home = event.teams?.home?.name || (hasVs ? event.title.split(' vs ')[0] : event.title);
+    const away = event.teams?.away?.name || (hasVs ? event.title.split(' vs ')[1] : '');
+
+    const displayHome = home;
+    const displayAway = away;
+
+    const is247 = !event.date || event.date === 0;
+    const eventDate = is247 ? null : new Date(event.date);
+    const eventTimeStr = is247 ? "24/7" : eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const eventDateFormatted = is247 ? "24/7 Live Stream" : formatDateEnglish(eventDate);
+
+    return (
+      <a
+        href={`/live/${slugify(sport.sport_id)}/${slugify(`${event.title}`)}/${event.id}/`}
+        class="group match-card-premium"
+        data-search={`${displayHome} ${displayAway} ${sport.sport}`.toLowerCase()}
+      >
+        {/* Hidden H3 for SEO */}
+        <h3 class="sr-only">{displayHome}{displayAway ? ` vs ${displayAway}` : ''} Live Stream</h3>
+
+        {/* TOP: LIVE badge + date */}
+        <div class="mc-top-bar">
+          <div class="mc-live-indicator">
+            <span class="mc-live-dot-sm"></span>
+            <span class="mc-live-label">LIVE</span>
+          </div>
+          <div class="mc-date">{eventDateFormatted}</div>
+        </div>
+
+        {/* TEAMS ROW */}
+        <div class="mc-teams-row">
+
+          {/* HOME TEAM */}
+          <div class="mc-team mc-team-home">
+            <div class="mc-badge-wrap">
+              {event.teams?.home?.badge ? (
+                <img
+                  src={ENDPOINTS.BADGE(event.teams.home.badge)}
+                  alt={displayHome}
+                  class="mc-badge-img"
+                  loading="lazy"
+                  decoding="async"
+                  onerror="this.style.display='none'"
+                />
+              ) : (
+                <div class="mc-badge-fallback">{sportIcons[sport.sport_id] || "🏆"}</div>
+              )}
+            </div>
+            <span class="mc-team-name">{displayHome}</span>
+          </div>
+
+          {/* VS + TIME */}
+          <div class="mc-center">
+            <div class="mc-vs-wrap">
+              <span class="mc-vs">{displayAway ? "VS" : "•"}</span>
+            </div>
+            <div
+              class="match-status-container mc-time"
+              data-timestamp={event.date}
+            >
+              <span class="status-text">{eventTimeStr}</span>
+            </div>
+            <div class="mc-watch-btn group-hover:mc-watch-btn-active">
+              <span>▶ Watch Now</span>
+            </div>
+          </div>
+
+          {/* AWAY TEAM */}
+          {displayAway ? (
+            <div class="mc-team mc-team-away">
+              <span class="mc-team-name">{displayAway}</span>
+              <div class="mc-badge-wrap">
+                {event.teams?.away?.badge ? (
+                  <img
+                    src={ENDPOINTS.BADGE(event.teams.away.badge)}
+                    alt={displayAway}
+                    class="mc-badge-img"
+                    loading="lazy"
+                    decoding="async"
+                    onerror="this.style.display='none'"
+                  />
+                ) : (
+                  <div class="mc-badge-fallback">{sportIcons[sport.sport_id] || "🏆"}</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div class="mc-team mc-team-away">
+              <span class="mc-team-name text-xs opacity-90 font-bold uppercase px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/40">24/7 Live</span>
+            </div>
+          )}
+
+        </div>
+      </a>
+    );
+  })}
+</div>
+) : (
+  <div class="theme-card rounded-xl p-8 text-center">
+    <div class="text-5xl mb-4">{sportIcons[sport.sport_id] || "🏆"}</div>
+    <p class="theme-text-secondary text-lg font-bold">No live {sport.sport} streams right now!</p>
+    <p class="theme-text-secondary mt-2 text-sm">Check back later for exciting matches!</p>
+  </div>
+)}
+              </div>
+            );
+        })
+      }
+
+    </div>
+       </div>
+
+  <div class="w-full px-2 sm:px-4 my-12">
+    <div class="mx-auto max-w-4xl">
+      <div class="theme-card rounded-2xl p-6 sm:p-10 shadow-xl border backdrop-blur-sm prose prose-invert max-w-none theme-text-secondary leading-relaxed article-content">
+        <h2 class="text-2xl sm:text-4xl font-black mt-0 mb-6 theme-text-primary">Methstreams &ndash; The #1 Best Buffstreams &amp; Crackstreams Alternative for Free HD Live Sports</h2>
+
+        <p class="text-lg mb-6">In today’s digital era, sports enthusiasts frequently face overpriced pay-per-views, geo-blocked broadcasts, and split broadcast rights across half a dozen streaming apps. That is why millions of fans are making the switch to <strong>Methstreams</strong> — the undisputed <strong>best Buffstreams &amp; Crackstreams</strong> alternative engineered to deliver uninterrupted, high-definition live sports directly to your browser for free.</p>
+
+        <p class="mb-8">From high-octane NFL Sunday showdowns and NBA buzzer-beaters to electric Premier League soccer derbies, UFC championship main cards, and Formula 1 Grand Prix races, <strong>Methstreams</strong> offers total multi-sport freedom with zero accounts, zero fees, and rock-solid 1080p 60fps streaming quality.</p>
+
+        <h2 class="mt-12">Why Sports Fans Choose Methstreams Over Buffstreams &amp; Crackstreams in 2026</h2>
+        <p>While pioneers like <strong>Buffstreams</strong> and <strong>Crackstreams</strong> were popular in previous years, they have become plagued by server crashes, aggressive pop-up redirects, and expired domains. <strong>Methstreams</strong> solves every pain point with a modern, viewer-first streaming architecture:</p>
+
+        <ul>
+          <li><strong>Ultra-Low Latency Cloud Feeds:</strong> Enjoy real-time sports action with low-delay feeds so you never get goals or touchdowns spoiled by social media notifications.</li>
+          <li><strong>Multi-Server Failover System:</strong> When older <strong>Buffstreams</strong> feeds crash during massive finals, <strong>Methstreams</strong> provides multiple instant one-click backup links.</li>
+          <li><strong>Clean, Distraction-Free Player:</strong> No malicious downloads or deceptive pop-under traps — just pure, instant live sports video.</li>
+          <li><strong>Full Mobile &amp; Smart TV Optimization:</strong> Watch smoothly on iPhone, Android, iPad, PC, Mac, Amazon Firestick, or smart television browsers without installing APKs or plugins.</li>
+        </ul>
+
+        <h2 class="mt-12">Extensive Live Sports Coverage Available on Methstreams</h2>
+        <p>No matter what sport moves you, <strong>Methstreams</strong> ensures you have front-row access 365 days a year:</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-8 not-prose">
+          <div class="p-5 rounded-xl theme-card border border-white/10 bg-white/5">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span class="text-blue-400">⚽</span> Worldwide Football &amp; Soccer
+            </h3>
+            <p class="text-xs sm:text-sm theme-text-secondary leading-relaxed">
+              Stream every match from the English Premier League, UEFA Champions League, La Liga, Serie A, Bundesliga, MLS, and international FIFA World Cup qualifiers. When <strong>Buffstreams</strong> links fail, <strong>Methstreams</strong> delivers non-stop 1080p soccer streams.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-xl theme-card border border-white/10 bg-white/5">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span class="text-blue-400">🏈</span> NFL &amp; College Football
+            </h3>
+            <p class="text-xs sm:text-sm theme-text-secondary leading-relaxed">
+              Never miss a single down with NFL RedZone coverage, Thursday Night Football, Sunday Ticket matchups, Monday Night Football, the NFL Playoffs, and the Super Bowl. <strong>Methstreams</strong> is universally rated as the <strong>best Buffstreams &amp; Crackstreams</strong> alternative for football fans.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-xl theme-card border border-white/10 bg-white/5">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span class="text-blue-400">🏀</span> NBA &amp; NCAA Basketball
+            </h3>
+            <p class="text-xs sm:text-sm theme-text-secondary leading-relaxed">
+              Catch all 82 regular-season games, the Emirates NBA Cup, March Madness tournament, NBA Playoffs, and the Finals in buttery-smooth 60fps high frame rate with crystal-clear audio.
+            </p>
+          </div>
+
+          <div class="p-5 rounded-xl theme-card border border-white/10 bg-white/5">
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span class="text-blue-400">🥊</span> UFC, MMA &amp; World Championship Boxing
+            </h3>
+            <p class="text-xs sm:text-sm theme-text-secondary leading-relaxed">
+              Stream every numbered UFC PPV, Fight Night undercard, Bellator event, and heavyweight championship boxing bout without paying $80+ pay-per-view fees — making <strong>Methstreams</strong> the top <strong>Crackstreams</strong> alternative.
+            </p>
+          </div>
+        </div>
+
+        <p>Additionally, <strong>Methstreams</strong> broadcasts live Formula 1 (F1), MotoGP, Major League Baseball (MLB World Series), NHL Stanley Cup ice hockey, Cricket (IPL &amp; ICC World Cups), Rugby, and Grand Slam Tennis tournaments around the clock.</p>
+
+        <h2 class="mt-12">Head-to-Head Comparison: Methstreams vs. Buffstreams vs. Crackstreams</h2>
+        <div class="overflow-x-auto my-6 not-prose">
+          <table class="w-full text-left border-collapse border border-white/10 text-xs sm:text-sm rounded-xl overflow-hidden shadow-2xl">
+            <thead>
+              <tr class="bg-blue-950/40 border-b border-blue-500/20 text-white">
+                <th class="p-3.5 font-bold">Feature</th>
+                <th class="p-3.5 font-bold text-blue-400">Methstreams</th>
+                <th class="p-3.5 font-bold">Buffstreams</th>
+                <th class="p-3.5 font-bold">Crackstreams</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5 theme-text-secondary bg-[#0a0f1d]/70">
+              <tr class="hover:bg-blue-500/5 transition-colors">
+                <td class="p-3.5 font-medium text-white">Streaming Resolution</td>
+                <td class="p-3.5 text-blue-400 font-bold">1080p / 720p HD (60fps)</td>
+                <td class="p-3.5">Standard Def / Choppy</td>
+                <td class="p-3.5">Variable / Frequent Freezes</td>
+              </tr>
+              <tr class="hover:bg-blue-500/5 transition-colors">
+                <td class="p-3.5 font-medium text-white">Backup Stream Servers</td>
+                <td class="p-3.5 text-blue-400 font-bold">Multiple Live Links per Match</td>
+                <td class="p-3.5">Single Link / Frequent 404</td>
+                <td class="p-3.5">Limited / Slow Feeds</td>
+              </tr>
+              <tr class="hover:bg-blue-500/5 transition-colors">
+                <td class="p-3.5 font-medium text-white">User Experience</td>
+                <td class="p-3.5 text-blue-400 font-bold">Clean, Modern &amp; Fast</td>
+                <td class="p-3.5">Heavy Popups &amp; Redirects</td>
+                <td class="p-3.5">Intrusive Ads &amp; Fake Buttons</td>
+              </tr>
+              <tr class="hover:bg-blue-500/5 transition-colors">
+                <td class="p-3.5 font-medium text-white">Sign-Up or Credit Card</td>
+                <td class="p-3.5 text-blue-400 font-bold">Never Required (100% Free)</td>
+                <td class="p-3.5">Fake Account Prompts</td>
+                <td class="p-3.5">Deceptive Surveys</td>
+              </tr>
+              <tr class="hover:bg-blue-500/5 transition-colors">
+                <td class="p-3.5 font-medium text-white">Platform Uptime</td>
+                <td class="p-3.5 text-blue-400 font-bold">99.9% Reliable CDN</td>
+                <td class="p-3.5">Often Down on Matchdays</td>
+                <td class="p-3.5">Inconsistent Mirrors</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="mt-12">How to Start Watching Live Sports on Methstreams</h2>
+        <p>Streaming your favorite sports match on <strong>Methstreams</strong> is quick and hassle-free:</p>
+
+        <ol>
+          <li><strong>Visit the Homepage:</strong> Head over to the official <strong>Methstreams</strong> website on any browser.</li>
+          <li><strong>Pick Your Sport:</strong> Tap on the sport category icon (Soccer, NFL, NBA, MMA, etc.) or use the live search bar.</li>
+          <li><strong>Select the Event:</strong> Click on your desired fixture to open the dedicated match stream room.</li>
+          <li><strong>Enjoy the Stream:</strong> Choose your preferred high-speed server feed and watch the game in full HD!</li>
+        </ol>
+
+        <h2 class="mt-12">Frequently Asked Questions (FAQs)</h2>
+
+        <div class="space-y-6 my-6 not-prose">
+          <div class="p-5 rounded-xl theme-card border border-white/10">
+            <h3 class="text-base sm:text-lg font-bold text-white mb-2">What makes Methstreams the best Buffstreams &amp; Crackstreams alternative?</h3>
+            <p class="theme-text-secondary text-sm leading-relaxed">Unlike older portals that suffer from constant buffering and broken links, <strong>Methstreams</strong> provides cloud-accelerated video servers, multi-server redundancy, zero account requirements, and a clean mobile-friendly interface, making it the <strong>best Buffstreams &amp; Crackstreams</strong> alternative today.</p>
+          </div>
+
+          <div class="p-5 rounded-xl theme-card border border-white/10">
+            <h3 class="text-base sm:text-lg font-bold text-white mb-2">Is streaming on Methstreams completely free?</h3>
+            <p class="theme-text-secondary text-sm leading-relaxed">Yes. <strong>Methstreams</strong> is 100% free with no subscription tiers, hidden costs, or credit card requirements.</p>
+          </div>
+
+          <div class="p-5 rounded-xl theme-card border border-white/10">
+            <h3 class="text-base sm:text-lg font-bold text-white mb-2">Can I watch Methstreams on Smart TV or Firestick?</h3>
+            <p class="theme-text-secondary text-sm leading-relaxed">Yes! Open any web browser on your Smart TV, Android TV, Apple TV, or Amazon Firestick (e.g. Silk Browser) and navigate to <strong>Methstreams</strong> to watch on the big screen.</p>
+          </div>
+
+          <div class="p-5 rounded-xl theme-card border border-white/10">
+            <h3 class="text-base sm:text-lg font-bold text-white mb-2">What should I do if a stream lags or freezes?</h3>
+            <p class="theme-text-secondary text-sm leading-relaxed">Every match features multiple backup server feeds. If one stream stutters due to heavy traffic, simply click on an alternative server button to switch feeds instantly.</p>
+          </div>
+        </div>
+
+        <h2 class="mt-12">Conclusion: Bookmark Methstreams as Your Matchday Destination</h2>
+        <p>Don't let expensive paywalls or unreliable mirrors ruin game day. With pristine HD quality, lightning-fast servers, and unmatched multi-sport coverage, <strong>Methstreams</strong> stands out as the ultimate <strong>best Buffstreams &amp; Crackstreams</strong> alternative. Bookmark our homepage and experience sports streaming the way it was meant to be!</p>
+      </div>
+    </div>
+  </div>
+
+<script is:inline>
+  const searchInput = document.getElementById('match-search');
+  const sportSections = document.querySelectorAll('.sport-section');
+  const noMatchesMsg = document.getElementById('no-matches-found');
+  const sportBtns = document.querySelectorAll('.sport-filter-btn');
+
+  // Initialize: show ALL sport sections
+  sportSections.forEach((section) => {
+    section.classList.remove('hidden');
+  });
+
+  // Handle sport filter button clicks
+  sportBtns.forEach((btn, index) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault(); // Prevent default anchor click
+      
+      // Remove active state from all buttons
+      sportBtns.forEach(b => {
+        b.classList.remove('active');
+      });
+      
+      // Add active state to clicked button
+      btn.classList.add('active');
+      
+      // Scroll to the clicked sport's section (keep ALL sports still visible)
+      sportSections[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase().trim();
+      let hasAnyMatches = false;
+
+      sportSections.forEach(section => {
+        const cards = section.querySelectorAll('.match-card-premium');
+        let hasMatchesInSection = false;
+
+        cards.forEach(card => {
+          const searchData = card.getAttribute('data-search');
+          if (searchData.includes(searchTerm)) {
+            card.classList.remove('hidden');
+            card.classList.add('grid');
+            hasMatchesInSection = true;
+            hasAnyMatches = true;
+          } else {
+            card.classList.remove('grid');
+            card.classList.add('hidden');
+          }
+        });
+
+        if (hasMatchesInSection) {
+          section.classList.remove('hidden');
+        } else {
+          section.classList.add('hidden');
+        }
+      });
+
+      if (hasAnyMatches) {
+        noMatchesMsg.classList.add('hidden');
+      } else {
+        noMatchesMsg.classList.remove('hidden');
+      }
+    });
+  }
+
+  // FAQ Accordion
+  const faqQuestions = document.querySelectorAll('.faq-question');
+  faqQuestions.forEach(question => {
+    question.addEventListener('click', () => {
+      const answer = question.nextElementSibling;
+      const icon = question.querySelector('.faq-icon');
+      
+      // Toggle visibility
+      const isHidden = answer.classList.contains('hidden');
+      
+      // Close all other FAQs first (optional but nice)
+      document.querySelectorAll('.faq-answer').forEach(ans => ans.classList.add('hidden'));
+      document.querySelectorAll('.faq-icon').forEach(i => i.style.transform = 'rotate(0deg)');
+      
+      if (isHidden) {
+        answer.classList.remove('hidden');
+        icon.style.transform = 'rotate(180deg)';
+      }
+    });
+  });
+
+  // Match Status & Countdown Timer
+  function updateMatchStatuses() {
+    const containers = document.querySelectorAll('.match-status-container');
+    const now = new Date().getTime();
+
+    containers.forEach(container => {
+      const timestamp = parseInt(container.getAttribute('data-timestamp'));
+      const statusText = container.querySelector('.status-text');
+      const diff = timestamp - now;
+
+      if (diff <= 0) {
+        // Match is LIVE
+        if (!statusText.classList.contains('is-live')) {
+          statusText.innerHTML = `<span class="flex items-center gap-1.5 text-red-500"><span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>LIVE</span>`;
+          statusText.classList.add('is-live');
+          statusText.classList.remove('theme-text-secondary');
+          statusText.parentElement.parentElement.parentElement.classList.add('border-red-500/30');
+        }
+      } else {
+        // Match is Upcoming - Show Countdown
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+        let countdownStr = '';
+        if (hours > 0) countdownStr += `${hours}h `;
+        countdownStr += `${minutes}m ${seconds}s`;
+        
+        statusText.innerHTML = `<span class="text-brand font-bold">Starts in: ${countdownStr}</span>`;
+      }
+    });
+  }
+
+  // Initial call and set interval
+  updateMatchStatuses();
+  setInterval(updateMatchStatuses, 1000);
+</script>
+</Layout>

@@ -1,0 +1,315 @@
+﻿---
+import "../../styles/global.css";
+const SITE_NAME = import.meta.env.PUBLIC_SITE_NAME || "Soccer100";
+export const prerender = false;
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blogger V7 - Edit Page</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <style is:global>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #e5e7eb;
+        min-height: 100vh;
+        display: flex;
+      }
+      .sidebar {
+        width: 180px;
+        background: #1f2937;
+        color: white;
+        padding: 20px 0;
+        flex-shrink: 0;
+        min-height: 100vh;
+      }
+      .sidebar-logo {
+        padding: 0 20px 20px;
+        border-bottom: 1px solid #374151;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .sidebar-logo h1 { margin: 0; font-size: 18px; font-weight: 700; }
+      .theme-toggle {
+        background: #374151; color: white; border: none; border-radius: 6px;
+        width: 30px; height: 30px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .sidebar-menu { padding: 0 8px; }
+      .menu-item {
+        padding: 10px 12px; display: flex; align-items: center; gap: 10px;
+        color: #d1d5db; text-decoration: none;
+        border-radius: 6px; font-size: 14px; cursor: pointer; margin-bottom: 2px;
+      }
+      .menu-item:hover { background: #374151; color: white; }
+      .menu-item.active { background: #374151; color: white; }
+      .main { flex: 1; padding: 24px 32px; }
+      .topbar {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;
+      }
+      .user-chip {
+        background: white; border: 1px solid #e5e7eb;
+        padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; color: #374151;
+      }
+      .page-header { margin-bottom: 20px; }
+      .breadcrumb {
+        font-size: 13px; color: #6b7280; text-align: right; margin-bottom: 12px;
+      }
+      .breadcrumb a { color: #22c55e; text-decoration: none; }
+      .breadcrumb a:hover { text-decoration: underline; }
+      .page-header h2 { margin: 0 0 4px; font-size: 24px; font-weight: 700; color: #111827; }
+      .page-header p { margin: 0; color: #6b7280; font-size: 14px; }
+      .form-card {
+        background: white; border: 1px solid #e5e7eb; border-radius: 8px;
+        max-width: 1200px; padding: 32px;
+      }
+      .form-label {
+        display: block; font-size: 13px; font-weight: 600; color: #374151;
+        margin-bottom: 8px; letter-spacing: 0.02em;
+      }
+      .form-input, .form-textarea {
+        width: 100%; padding: 10px 14px;
+        border: 1px solid #d1d5db; border-radius: 6px;
+        font-size: 14px; font-family: inherit;
+        background: #fafafa; color: #111827; transition: all 0.15s;
+      }
+      .form-input:focus, .form-textarea:focus {
+        outline: none; background: white;
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(96,165,250,0.2);
+      }
+      .form-textarea { min-height: 140px; font-family: 'Courier New', monospace; resize: vertical; }
+      .form-group { margin-bottom: 24px; }
+      .btn-update {
+        background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe;
+        padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600;
+        cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      }
+      .btn-update:hover { background: #c7d2fe; }
+      .btn-update:disabled { opacity: 0.5; cursor: not-allowed; }
+      .preview-section {
+        margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb;
+      }
+      .preview-section h3 {
+        margin: 0 0 16px; font-size: 16px; font-weight: 600; color: #374151;
+      }
+      .preview-frame {
+        border: 1px dashed #d1d5db; border-radius: 8px;
+        padding: 20px; background: #f9fafb;
+        min-height: 300px; display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
+      }
+      .preview-frame iframe { max-width: 100%; }
+      .page-link-box {
+        background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px;
+        padding: 12px 16px; margin-bottom: 24px;
+        display: flex; justify-content: space-between; align-items: center; gap: 10px;
+      }
+      .page-link-box a { color: #16a34a; text-decoration: none; font-size: 13px; word-break: break-all; }
+      .page-link-box a:hover { text-decoration: underline; }
+      .btn-copy-link {
+        background: #dbeafe; color: #1e40af; border: none;
+        padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 12px;
+        cursor: pointer; flex-shrink: 0;
+      }
+      .toast {
+        position: fixed; bottom: 24px; right: 24px;
+        background: #065f46; color: white;
+        padding: 12px 20px; border-radius: 6px; font-size: 14px;
+        display: none; z-index: 999; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <h1>Blogger V7</h1>
+        <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+      </div>
+      <div class="sidebar-menu">
+        <a href="/admin/dashboard" class="menu-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          Dashboard
+        </a>
+        <a href="/admin/ads" class="menu-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 7h20v10H2z"/><path d="M13 17v4M7 17v4M17 17v4M9 9h1M14 9h1M9 13h6"/></svg>
+          Ads Placement
+        </a>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        <div></div>
+        <div class="user-chip">👤 admin ▾</div>
+      </div>
+
+      <div class="breadcrumb">
+        <a href="/admin/dashboard">Dashboard</a> > <a id="sportLink" href="/admin/sport?s=S">S</a> > Edit : <span id="pageIdSpan">S-1</span>
+      </div>
+      <div class="page-header">
+        <h2>Edit Page</h2>
+        <p id="pageNameH">S-1</p>
+      </div>
+
+      <div class="form-card">
+        <div class="page-link-box">
+          <a id="pageLink" href="/s/S-1" target="_blank">🔗 View on site: /s/S-1</a>
+          <button class="btn-copy-link" onclick="copyPageLink()">Copy Link</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="title">Title</label>
+          <input type="text" id="title" class="form-input" placeholder="Argentina - Spain" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="iframe">Iframe</label>
+          <textarea id="iframe" class="form-textarea" placeholder="<iframe frameborder='0' width='640' height='480' src='...' allowfullscreen></iframe>"></textarea>
+        </div>
+
+        <button class="btn-update" id="updateBtn" onclick="updatePage()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Update Page
+        </button>
+
+        <div class="preview-section">
+          <h3>Live Preview</h3>
+          <div class="preview-frame" id="previewFrame">
+            <p style="color:#9ca3af;">Paste an iframe code above to see preview</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">✅ Page Updated Successfully!</div>
+
+    <script is:inline>
+      const BASE = '/api/admin';
+      const params = new URLSearchParams(window.location.search);
+      const PAGE_ID = params.get('page') || 'S-1';
+      const SPORT_ID = params.get('s') || PAGE_ID.split('-')[0] || 'S';
+
+      function toggleTheme() {
+        try {
+          const cur = localStorage.getItem('theme') || 'light';
+          const next = cur === 'light' ? 'dark' : 'light';
+          localStorage.setItem('theme', next);
+          document.documentElement.classList.toggle('light', next === 'light');
+        } catch(e) {}
+      }
+
+      async function checkAuth() {
+        try {
+          const res = await fetch('/api/admin/login.json', { credentials: 'same-origin' });
+          const data = await res.json();
+          if (!data.loggedIn) window.location.href = '/admin/login';
+        } catch(e) { window.location.href = '/admin/login'; }
+      }
+
+      document.getElementById('pageIdSpan').textContent = PAGE_ID;
+      document.getElementById('pageNameH').textContent = PAGE_ID;
+      document.getElementById('sportLink').textContent = SPORT_ID;
+      document.getElementById('sportLink').href = `/admin/sport?s=${SPORT_ID}`;
+      const pageLink = `${window.location.origin}/s/${PAGE_ID}`;
+      document.getElementById('pageLink').href = `/s/${PAGE_ID}`;
+      document.getElementById('pageLink').textContent = `🔗 View on site: /s/${PAGE_ID}`;
+
+      function copyPageLink() {
+        navigator.clipboard.writeText(pageLink).then(() => {
+          document.getElementById('toast').textContent = 'Link Copied!';
+          document.getElementById('toast').style.display = 'block';
+          setTimeout(() => document.getElementById('toast').style.display = 'none', 2000);
+        });
+      }
+
+      async function loadPage() {
+        const res = await fetch(`${BASE}/pages.json?id=${PAGE_ID}`, { credentials: 'same-origin' });
+        if (res.status === 401) { window.location.href = '/admin/login'; return; }
+        const data = await res.json();
+        if (data.page) {
+          document.getElementById('title').value = data.page.title || '';
+          document.getElementById('iframe').value = data.page.iframe || '';
+          updatePreview();
+        }
+      }
+
+      function updatePreview() {
+        const frame = document.getElementById('previewFrame');
+        const code = document.getElementById('iframe').value.trim();
+        if (!code) {
+          frame.innerHTML = '<p style="color:#9ca3af;">Paste an iframe code above to see preview</p>';
+          return;
+        }
+        const tmp = document.createElement('div');
+        tmp.innerHTML = code;
+        const iframe = tmp.querySelector('iframe');
+        if (iframe) {
+          iframe.style.maxWidth = '100%';
+          frame.innerHTML = '';
+          frame.appendChild(iframe);
+        } else {
+          frame.innerHTML = `<code style="color:#991b1b;font-size:12px;">Warning: No iframe tag found in your code</code>`;
+        }
+      }
+
+      document.getElementById('iframe').addEventListener('input', updatePreview);
+
+      async function updatePage() {
+        const btn = document.getElementById('updateBtn');
+        btn.disabled = true;
+        const origHTML = btn.innerHTML;
+        btn.textContent = '⏳ Saving...';
+        const title = document.getElementById('title').value;
+        const iframe = document.getElementById('iframe').value;
+        const toast = document.getElementById('toast');
+        try {
+          const res = await fetch(`${BASE}/pages.json`, {
+            method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: PAGE_ID, title, iframe })
+          });
+          if (res.status === 401) { window.location.href = '/admin/login'; return; }
+          let data = {};
+          try { data = await res.json(); } catch (_) {}
+          btn.disabled = false;
+          btn.innerHTML = origHTML;
+          if (res.ok) {
+            toast.textContent = '✅ Page Updated! Redirecting...';
+            toast.style.background = '#065f46';
+            toast.style.display = 'block';
+            setTimeout(() => {
+              window.location.href = `/admin/sport?s=${SPORT_ID}`;
+            }, 800);
+          } else {
+            const msg = '❌ ' + (data.error || 'Update failed');
+            console.error('[updatePage] API error:', data);
+            if (data.detail) console.error('[updatePage] Stack:', data.detail);
+            toast.textContent = msg;
+            toast.style.background = '#991b1b';
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 2500);
+          }
+        } catch(e) {
+          console.error('[updatePage] Network error:', e);
+          btn.disabled = false;
+          btn.innerHTML = origHTML;
+          toast.textContent = '❌ Network error';
+          toast.style.background = '#991b1b';
+          toast.style.display = 'block';
+          setTimeout(() => toast.style.display = 'none', 2500);
+        }
+      }
+
+      checkAuth();
+      loadPage();
+    </script>
+  </body>
+</html>

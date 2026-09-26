@@ -1,0 +1,41 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const title = "Sitemap - Methstreams";
+const description = "Sitemap for Methstreams live sports streaming landing pages.";
+
+const links = [
+  { name: "Home", url: "/" },
+  { name: "Blog", url: "/blog/" },
+  { name: "Methstreams Alternative", url: "/methstreams-alternative/" },
+  { name: "Buffstreams Alternative", url: "/buffstreams-alternative/" },
+  { name: "Totalsportek Alternative", url: "/totalsportek-alternative/" },
+  { name: "Crackstreams Alternative", url: "/crackstreams-alternative/" },
+  { name: "Streameast Alternative", url: "/streameast/" },
+  { name: "Yacine TV Alternative", url: "/yacine-tv/" },
+  { name: "Yalla Live Alternative", url: "/yalla-live/" },
+  { name: "Kora Live Alternative", url: "/kora-live/" },
+  { name: "Rojadirecta Alternative", url: "/rojadirecta/" },
+  { name: "Soccer100 Alternative", url: "/soccer100/" },
+  { name: "Sportsurge Alternative", url: "/sportsurge/" },
+  { name: "Totalsportek Live", url: "/totalsportek/" },
+  { name: "Contact Us", url: "/contact-us/" },
+  { name: "Privacy Policy", url: "/privacy-policy/" },
+  { name: "DMCA", url: "/dmca/" }
+];
+---
+
+<Layout title={title} description={description}>
+  <div class="max-w-4xl mx-auto px-4 py-16 theme-text-primary">
+    <h1 class="text-3xl font-black mb-8 border-b border-brand pb-2 uppercase italic">Sitemap</h1>
+    <ul class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {links.map(link => (
+        <li>
+          <a href={link.url} class="hover:text-brand transition-colors flex items-center gap-2">
+            <span class="text-brand">›</span> {link.name}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</Layout>

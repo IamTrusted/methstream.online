@@ -1,0 +1,50 @@
+---
+const SITE_NAME = import.meta.env.PUBLIC_SITE_NAME || "Methstreams";
+---
+<nav class="theme-nav sticky top-0 z-50 border-b border-[var(--border-color)]">
+  <div class="mx-3">
+    <div class="mx-auto max-w-4xl flex items-center justify-between gap-3 py-2.5">
+      <div class="flex items-center gap-3">
+        <a href="/" class="group flex items-center gap-2 text-xl sm:text-2xl font-black tracking-tight transition-transform hover:scale-102">
+          <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-base shadow-[0_0_15px_rgba(59,130,246,0.5)] group-hover:shadow-[0_0_22px_rgba(59,130,246,0.8)] transition-all">
+            ⚡
+          </span>
+          <span class="bg-gradient-to-r from-blue-400 via-sky-300 to-blue-500 bg-clip-text text-transparent font-black tracking-tighter">
+            {SITE_NAME}
+          </span>
+        </a>
+      </div>
+        
+      <div class="flex items-center gap-2 sm:gap-3 ml-auto">
+        <a 
+          href="https://discord.com/invite/Q2juzbcww" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          class="flex items-center gap-1.5 bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold text-xs sm:text-sm px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-full shadow-md hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all duration-200 shrink-0"
+          title="Join Discord Community"
+        >
+          <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 127.14 96.36">
+            <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+          </svg>
+          <span class="hidden sm:inline">Discord</span>
+        </a>
+
+        <div class="relative max-w-[130px] sm:max-w-xs group">
+          <input 
+            type="text" 
+            id="match-search" 
+            placeholder="Search matches..." 
+            class="w-full bg-[#0a0f1d] border border-[var(--border-color)] rounded-full py-1.5 sm:py-2 px-3 sm:px-4 theme-text-primary text-xs sm:text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all shadow-inner" 
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<style>
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+
+

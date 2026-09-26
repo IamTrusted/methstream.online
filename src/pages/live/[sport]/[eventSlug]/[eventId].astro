@@ -1,0 +1,673 @@
+---
+import Layout from "../../../../layouts/Layout.astro";
+import translateTeam from "../../../../utils/translateTeams";
+import slugify from "../../../../utils/slugify";
+import { API_BASE_URL } from "../../../../utils/api";
+
+let { eventSlug, eventId } = Astro.params;
+
+// Clean eventId from trailing slashes if any
+if (eventId && eventId.endsWith('/')) {
+  eventId = eventId.slice(0, -1);
+}
+
+const SITE_NAME = import.meta.env.SITE_NAME || "Methstreams";
+const PUBLIC_BASE_URL = (import.meta.env.PUBLIC_BASE_URL || Astro.site?.toString() || "https://methstream.online").replace(/\/$/, '');
+
+interface APIMatch {
+    id: string;
+    title: string;
+    category: string;
+    date: number;
+    poster?: string;
+    popular: boolean;
+    teams?: {
+        home?: {
+            name: string;
+            badge: string;
+        },
+        away?: {
+            name: string;
+            badge: string;
+        }
+    };
+    sources: {
+        source: string;
+        id: string;
+    }[];
+}
+
+interface Stream {
+    id: string;
+    streamNo: number;
+    language: string;
+    hd: boolean;
+    embedUrl: string;
+    source: string;
+}
+
+let match: APIMatch | undefined;
+let streams: Stream[] = [];
+let sportName = "";
+
+// No fake fallback streams - show proper "no stream" UI instead
+const fallbackStreams: Stream[] = [];
+
+// Fallback match in case API fails - use URL info to make it meaningful
+const sportFromUrl = Astro.params.sport || "football";
+const titleFromSlug = eventSlug 
+  ? eventSlug.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+  : "Live Match";
+
+const fallbackMatch: APIMatch = {
+  id: eventId || "fallback-match",
+  title: titleFromSlug,
+  category: sportFromUrl,
+  date: Date.now(),
+  popular: true,
+  sources: [
+    { source: "fallback", id: "1" },
+  ]
+};
+
+// Helper: fetch with timeout using AbortController
+async function fetchWithTimeout(url: string, timeoutMs = 7000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+// Fetch event data - wrapped in try/catch so page NEVER throws 500
+try {
+  const apiBase = import.meta.env.API || import.meta.env.PUBLIC_API_URL || "https://streamed.pk";
+
+  // Fetch sports and matches with timeout - if either fails, we use fallback
+  let allMatches: APIMatch[] = [];
+  let allSports: any[] = [];
+
+  try {
+    const [matchesRes, sportsRes] = await Promise.allSettled([
+      fetchWithTimeout(`${apiBase}/api/matches/all`, 8000),
+      fetchWithTimeout(`${apiBase}/api/sports`, 5000),
+    ]);
+
+    if (matchesRes.status === 'fulfilled' && matchesRes.value.ok) {
+      allMatches = await matchesRes.value.json();
+    }
+    if (sportsRes.status === 'fulfilled' && sportsRes.value.ok) {
+      allSports = await sportsRes.value.json();
+    }
+  } catch (fetchErr) {
+    console.error("API fetch failed (timeout or network):", fetchErr);
+  }
+  
+  // Find match by ID
+  match = allMatches.find((m: APIMatch) => m.id === eventId);
+
+  if (!match) {
+    match = allMatches.find((m: APIMatch) => m.id.toLowerCase() === eventId?.toLowerCase());
+  }
+
+  if (!match) {
+    console.log("Match not found in API, using fallback with URL data");
+    match = fallbackMatch;
+  }
+
+  // Determine sport name
+  const sport = allSports.find((s: any) => s.id === match?.category);
+  sportName = sport ? sport.name : (match.category || "Sports");
+
+  // Fetch streams for real (non-fallback) matches
+  if (match.sources && match.sources.length > 0 && match.id !== "fallback-match") {
+    try {
+      const streamPromises = match.sources.map((source: any) =>
+        fetchWithTimeout(`${apiBase}/api/stream/${source.source}/${source.id}`, 6000)
+          .then((r: Response) => r.ok ? r.json() : [])
+          .catch(() => [])
+      );
+      const allSourceStreams = await Promise.allSettled(streamPromises);
+      
+      const flattenedStreams = allSourceStreams
+        .filter((r: PromiseSettledResult<any>) => r.status === 'fulfilled')
+        .flatMap((r: PromiseSettledResult<any>) => (r as PromiseFulfilledResult<any>).value);
+      
+      if (flattenedStreams.length > 0) {
+        // embedUrl from streamed.pk API is a plain URL (not base64)
+        streams = flattenedStreams.filter((s: any) => s.embedUrl && typeof s.embedUrl === 'string');
+      }
+    } catch (e) {
+      console.error("Stream fetch error:", e);
+    }
+  }
+} catch (err: any) {
+  // Last resort catch - page will NEVER return 500
+  console.error("Match Page Critical Error, using all fallbacks:", err);
+  match = fallbackMatch;
+  sportName = Astro.params.sport || "Sports";
+  streams = fallbackStreams;
+}
+
+// Build plain stream URLs list for client-side JS
+// streamed.pk returns embedUrl as a plain URL directly
+const streamUrls = streams.map((s: Stream, idx: number) => ({
+  url: s.embedUrl,
+  label: `Stream ${idx + 1}`,
+  hd: s.hd,
+  language: s.language || 'English',
+  streamNo: s.streamNo || (idx + 1)
+}));
+
+const sportTranslations: { [key: string]: string } = {
+  'football': 'Football',
+  'basketball': 'Basketball',
+  'baseball': 'Baseball',
+  'hockey': 'Hockey',
+  'tennis': 'Tennis',
+  'mma': 'MMA',
+  'boxing': 'Boxing',
+  'motorsports': 'Motorsports',
+  'motor-sports': 'Motorsports',
+  'american-football': 'American Football',
+  'fight': 'Fight (UFC, Boxing)',
+  'rugby': 'Rugby',
+  'cricket': 'Cricket',
+  'volleyball': 'Volleyball',
+  'golf': 'Golf',
+  'snooker': 'Snooker',
+  'darts': 'Darts'
+};
+
+const translateSport = (id: string, name: string) => {
+  return sportTranslations[id] || name;
+};
+
+const formatDateEnglish = (date: Date) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  const dayName = days[date.getDay()];
+  const day = date.getDate().toString().padStart(2, '0');
+  const monthName = months[date.getMonth()];
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  
+  return `${dayName}, ${monthName} ${day} - ${hours}:${minutes}`;
+};
+
+const hasVs = match.title && match.title.includes(' vs ');
+const home = match.teams?.home?.name || (hasVs ? match.title.split(' vs ')[0] : match.title || "Live Stream");
+const away = match.teams?.away?.name || (hasVs ? match.title.split(' vs ')[1] : "");
+
+const displayHome = home;
+const displayAway = away;
+
+const is247 = !match.date || match.date === 0;
+const eventDate = is247 ? new Date() : new Date(match.date);
+const eventDateTimeStr = is247 ? "24/7 Live Stream" : formatDateEnglish(eventDate);
+
+const matchTitleDisplay = displayAway ? `${displayHome} vs ${displayAway}` : displayHome;
+const cleanTeams = matchTitleDisplay;
+const translatedSportName = sportName;
+const cleanLeague = sportName;
+
+const eventDateOnly = is247 ? "24/7" : eventDate.toLocaleDateString('en-US', { day: '2-digit', month: 'long', year: 'numeric' });
+const eventTimeOnly = is247 ? "LIVE" : eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+const truncateText = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trim()}...`;
+};
+
+let pageTitle = `${matchTitleDisplay} Live Stream - Methstreams`;
+if (pageTitle.length > 60) {
+  pageTitle = truncateText(`${matchTitleDisplay} | Methstreams`, 60);
+}
+
+let pageDesc = `Watch ${matchTitleDisplay} live stream in HD on Methstreams. The best Buffstreams & Crackstreams alternative with high-speed multi-server feeds.`;
+pageDesc = truncateText(pageDesc, 160);
+
+export const prerender = false;
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDesc}
+  keywords={`${displayHome}, ${displayAway}, Methstreams, Buffstreams, Crackstreams, ${translatedSportName} live stream, watch sports hd free`}
+>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    "name": `${displayHome} vs ${displayAway}`,
+    "startDate": eventDate.toISOString(),
+    "endDate": new Date(eventDate.getTime() + 7200000).toISOString(),
+    "description": pageDesc,
+    "image": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg",
+    "location": {
+      "@type": "VirtualLocation",
+      "url": Astro.url.href
+    },
+    "organizer": {
+      "@type": "Organization",
+      "name": translatedSportName,
+      "url": PUBLIC_BASE_URL
+    },
+    "performer": [
+      {
+        "@type": "SportsTeam",
+        "name": displayHome
+      },
+      {
+        "@type": "SportsTeam",
+        "name": displayAway
+      }
+    ],
+    "homeTeam": {
+      "@type": "SportsTeam",
+      "name": displayHome
+    },
+    "awayTeam": {
+      "@type": "SportsTeam",
+      "name": displayAway
+    },
+    "sport": translatedSportName,
+    "eventStatus": "https://schema.org/EventScheduled",
+    "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock",
+      "url": Astro.url.href
+    },
+    "url": Astro.url.href
+  })} slot="head" />
+  <script type="application/ld+json" is:inline set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": PUBLIC_BASE_URL
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": translatedSportName,
+        "item": `${PUBLIC_BASE_URL}/#${slugify(match.category)}`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": `${displayHome} vs ${displayAway}`,
+        "item": Astro.url.href
+      }
+    ]
+  })} slot="head" />
+
+  <div class="pt-10 px-4 max-w-3xl mx-auto text-left">
+    <div
+      class="space-y-6 text-center relative p-6 sm:p-8 rounded-2xl theme-card border border-white/10 shadow-2xl backdrop-blur-md"
+    >
+      <!-- Breadcrumbs -->
+      <nav class="flex text-xs sm:text-sm theme-text-secondary mb-4 justify-start" aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2">
+          <li><a href="/" class="hover:text-brand">Home</a></li>
+          <li class="flex items-center gap-2">
+            <span>/</span>
+            <span class="theme-text-primary font-bold">{translatedSportName}</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <span>/</span>
+            <span class="opacity-60">{matchTitleDisplay}</span>
+          </li>
+        </ol>
+      </nav>
+
+      <!-- Page Title -->
+      <h1
+        class="text-2xl sm:text-4xl font-black theme-text-primary animate-fadeIn wrap-break-word leading-tight"
+      >
+        {matchTitleDisplay} Live Stream - {translatedSportName}
+      </h1>
+
+      <!-- League and Date Info -->
+      <div
+        class="flex flex-col sm:flex-row justify-center items-center gap-3 text-sm theme-text-secondary mt-2 animate-fadeIn"
+      >
+        <span class="px-4 py-1.5 rounded-full bg-blue-600 font-black text-white shadow-lg shadow-blue-500/30 uppercase tracking-wider"
+          >{translatedSportName}</span
+        >
+        <span class="sm:ml-2 font-medium theme-card px-3 py-1.5 rounded-full border border-white/5">
+          • {eventDateTimeStr}
+        </span>
+      </div>
+
+      <!-- Player Section -->
+      <div class="w-full mt-6 flex flex-col gap-4">
+        <div class="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative group">
+            <div id="player-container" class="w-full h-full flex flex-col items-center justify-center bg-neutral-900 relative">
+              <div class="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg')] bg-center bg-no-repeat opacity-5 blur-sm"></div>
+              
+              <!-- Click overlay with play button -->
+              <div 
+                id="initial-watch-overlay" 
+                class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/90 cursor-pointer group/overlay"
+              >
+                <div class="relative z-10 flex flex-col items-center gap-6 p-4">
+                  <div class="w-24 h-24 bg-brand rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(243,168,51,0.4)] group-hover/overlay:scale-110 transition-transform duration-500">
+                    <svg class="w-12 h-12 text-black translate-x-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"></path>
+                    </svg>
+                  </div>
+                  
+                  <div class="text-center">
+                    <h3 id="overlay-title" class="text-2xl font-black theme-text-primary uppercase italic mb-2 tracking-tight">{streams.length > 0 ? 'Live Stream Ready' : 'Loading Streams...'}</h3>
+                    <p id="overlay-subtitle" class="theme-text-secondary text-sm mb-4 max-w-[250px] mx-auto">{streams.length > 0 ? `Click to watch ${matchTitleDisplay} in HD` : 'Fetching available stream sources, please wait...'}</p>
+                    
+                    <!-- Spinner shown when no streams yet -->
+                    <div id="overlay-spinner" class={`flex justify-center mb-4 ${streams.length > 0 ? 'hidden' : ''}`}>
+                      <div class="w-8 h-8 border-3 border-brand border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+
+                    <div id="upcoming-notice" class="hidden mb-4 p-3 rounded-lg bg-brand/10 border border-brand/20">
+                      <p class="text-brand text-xs font-bold uppercase tracking-wider">
+                        ⚠️ Stream will start near match time. Please refresh then.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Player iframe wrapper -->
+              <div id="player-wrapper" class="w-full h-full absolute inset-0"></div>
+            </div>
+          
+          <!-- Loading Overlay -->
+          <div id="player-loader" class="absolute inset-0 bg-black/80 flex items-center justify-center z-20 hidden">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-brand border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-brand font-bold text-sm">Loading stream...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stream Source List UI matching reference screenshot -->
+        <div class="w-full mt-4 rounded-xl border border-yellow-700/40 bg-[#0d0d0d] p-1.5 flex flex-col gap-1.5 shadow-2xl" id="source-list-container" style={streams && streams.length > 0 ? '' : 'display:none'}>
+          {streams && streams.length > 0 && streams.map((stream, idx) => (
+            <div
+              class={`source-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                idx === 0 
+                  ? 'bg-[#141417] border border-red-600 shadow-md' 
+                  : 'bg-[#121214]/70 border border-white/5 hover:bg-[#18181c] hover:border-white/10'
+              }`}
+              data-url={stream.embedUrl}
+              data-idx={idx}
+            >
+              <!-- Left indicator bar for active stream -->
+              <div class={`active-indicator absolute left-0 top-0 bottom-0 w-1.5 bg-red-600 rounded-l-lg ${idx === 0 ? '' : 'hidden'}`}></div>
+
+              <!-- Left section: HD/SD badge + Title + Current text -->
+              <div class="flex items-center gap-3 pl-2">
+                <span class={`quality-badge text-[11px] font-black px-1.5 py-0.5 rounded border uppercase ${
+                  stream.hd 
+                    ? 'bg-red-950/80 text-red-500 border-red-700/60' 
+                    : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                }`}>
+                  {stream.hd ? 'HD' : 'SD'}
+                </span>
+
+                <span class="stream-name font-bold text-sm text-white">
+                  Stream {idx + 1}
+                </span>
+
+                <span class={`current-badge text-red-500 font-semibold text-xs flex items-center gap-1 ${idx === 0 ? '' : 'hidden'}`}>
+                  <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  Current
+                </span>
+              </div>
+
+              <!-- Right section: Live viewer count + Language -->
+              <div class="flex items-center gap-4 text-xs font-medium">
+                <span class={`viewer-count text-red-500 flex items-center gap-1 ${(stream as any).viewers || idx === 0 ? '' : 'hidden'}`}>
+                  <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                  </svg>
+                  <span class="count-num">{(stream as any).viewers || 3}</span>
+                </span>
+
+                <span class="text-neutral-300 flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 opacity-80 text-neutral-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                  </svg>
+                  {stream.language || 'English'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <script is:inline define:vars={{ streamUrls, matchSources: match.sources || [], matchDate: match.date }}>
+        const playerWrapper = document.getElementById('player-wrapper');
+        const loader = document.getElementById('player-loader');
+        const overlay = document.getElementById('initial-watch-overlay');
+        const upcomingNotice = document.getElementById('upcoming-notice');
+        const container = document.getElementById('source-list-container');
+
+        let currentStreams = Array.isArray(streamUrls) ? [...streamUrls] : [];
+        let activeIdx = 0;
+
+        // Show notice if match is in the future (> 10 min from now), skip for 24/7 channels (date 0)
+        const now = Date.now();
+        if (matchDate && matchDate > 0 && matchDate > now + 600000) {
+          if (upcomingNotice) upcomingNotice.classList.remove('hidden');
+        }
+
+        function loadStream(streamUrl) {
+          if (!playerWrapper || !streamUrl) return;
+
+          // Show loader
+          if (loader) loader.classList.remove('hidden');
+
+          // Hide overlay immediately
+          if (overlay) overlay.style.display = 'none';
+
+          // Create fresh iframe
+          playerWrapper.innerHTML = '';
+          const iframe = document.createElement('iframe');
+          iframe.id = 'main-player';
+          iframe.style.cssText = 'width:100%;height:100%;border:0;';
+          iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture; camera; microphone');
+          iframe.setAttribute('allowfullscreen', 'true');
+          iframe.setAttribute('scrolling', 'no');
+          iframe.setAttribute('frameborder', '0');
+          iframe.src = streamUrl;
+
+          playerWrapper.appendChild(iframe);
+
+          iframe.onload = () => {
+            if (loader) loader.classList.add('hidden');
+          };
+
+          // Fallback: hide loader after 8 sec anyway
+          setTimeout(() => {
+            if (loader) loader.classList.add('hidden');
+          }, 8000);
+        }
+
+        function updateActiveRow(newIdx) {
+          activeIdx = newIdx;
+          const rows = document.querySelectorAll('.source-row');
+          rows.forEach((row, i) => {
+            const activeInd = row.querySelector('.active-indicator');
+            const currBadge = row.querySelector('.current-badge');
+            const viewerCnt = row.querySelector('.viewer-count');
+
+            if (i === newIdx) {
+              row.className = 'source-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 bg-[#141417] border border-red-600 shadow-md';
+              if (activeInd) activeInd.classList.remove('hidden');
+              if (currBadge) currBadge.classList.remove('hidden');
+              if (viewerCnt) viewerCnt.classList.remove('hidden');
+            } else {
+              row.className = 'source-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 bg-[#121214]/70 border border-white/5 hover:bg-[#18181c] hover:border-white/10';
+              if (activeInd) activeInd.classList.add('hidden');
+              if (currBadge) currBadge.classList.add('hidden');
+              if (viewerCnt) viewerCnt.classList.add('hidden');
+            }
+          });
+        }
+
+        function renderRows(streamsList) {
+          if (!container || !streamsList || streamsList.length === 0) return;
+          container.innerHTML = streamsList.map((s, idx) => `
+            <div
+              class="source-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                idx === activeIdx 
+                  ? 'bg-[#141417] border border-red-600 shadow-md' 
+                  : 'bg-[#121214]/70 border border-white/5 hover:bg-[#18181c] hover:border-white/10'
+              }"
+              data-url="${s.url}"
+              data-idx="${idx}"
+            >
+              <div class="active-indicator absolute left-0 top-0 bottom-0 w-1.5 bg-red-600 rounded-l-lg ${idx === activeIdx ? '' : 'hidden'}"></div>
+              <div class="flex items-center gap-3 pl-2">
+                <span class="quality-badge text-[11px] font-black px-1.5 py-0.5 rounded border uppercase ${
+                  s.hd 
+                    ? 'bg-red-950/80 text-red-500 border-red-700/60' 
+                    : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                }">
+                  ${s.hd ? 'HD' : 'SD'}
+                </span>
+                <span class="stream-name font-bold text-sm text-white">
+                  Stream ${idx + 1}
+                </span>
+                <span class="current-badge text-red-500 font-semibold text-xs flex items-center gap-1 ${idx === activeIdx ? '' : 'hidden'}">
+                  <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  Current
+                </span>
+              </div>
+              <div class="flex items-center gap-4 text-xs font-medium">
+                <span class="viewer-count text-red-500 flex items-center gap-1 ${s.viewers || idx === 0 ? '' : 'hidden'}">
+                  <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                  </svg>
+                  <span class="count-num">${s.viewers || 3}</span>
+                </span>
+                <span class="text-neutral-300 flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 opacity-80 text-neutral-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                  </svg>
+                  ${s.language || 'English'}
+                </span>
+              </div>
+            </div>
+          `).join('');
+          container.classList.remove('hidden');
+        }
+
+        // Event delegation for row clicks
+        if (container) {
+          container.addEventListener('click', (e) => {
+            const row = e.target.closest('.source-row');
+            if (!row) return;
+            e.stopPropagation();
+            const url = row.getAttribute('data-url');
+            const idx = parseInt(row.getAttribute('data-idx'), 10);
+
+            updateActiveRow(idx);
+
+            if (url) loadStream(url);
+
+            // Scroll to player
+            const playerContainer = document.getElementById('player-container');
+            if (playerContainer) {
+              playerContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          });
+        }
+
+        // On overlay click -> load first stream
+        if (overlay) {
+          overlay.addEventListener('click', () => {
+            if (currentStreams.length > 0 && currentStreams[0].url) {
+              loadStream(currentStreams[0].url);
+            }
+          });
+        }
+
+        // Client-side stream sync: Ensure ALL sources from the API are loaded without missing any
+        async function syncAllSources() {
+          if (!matchSources || matchSources.length === 0) return;
+          try {
+            const sourcePromises = matchSources.map(s =>
+              fetch(`https://streamed.pk/api/stream/${s.source}/${s.id}`)
+                .then(r => r.ok ? r.json() : [])
+                .catch(() => [])
+            );
+            const allResults = await Promise.allSettled(sourcePromises);
+            const allStreams = allResults
+              .filter(r => r.status === 'fulfilled')
+              .flatMap(r => r.value)
+              .filter(s => s && s.embedUrl && typeof s.embedUrl === 'string');
+
+            if (allStreams.length > 0) {
+              const currentUrls = new Set(currentStreams.map(s => s.url));
+              const hasNewStreams = allStreams.some(s => !currentUrls.has(s.embedUrl));
+              
+              if (hasNewStreams || currentStreams.length === 0) {
+                currentStreams = allStreams.map((s, idx) => ({
+                  url: s.embedUrl,
+                  label: `Stream ${idx + 1}`,
+                  hd: s.hd,
+                  language: s.language || 'English',
+                  streamNo: s.streamNo || (idx + 1),
+                  viewers: s.viewers || 3
+                }));
+                renderRows(currentStreams);
+
+                // Show the source list container now that we have streams
+                if (container) container.style.display = '';
+
+                // Update overlay text to show streams are ready
+                const overlayTitle = document.getElementById('overlay-title');
+                const overlaySub = document.getElementById('overlay-subtitle');
+                const overlaySpinner = document.getElementById('overlay-spinner');
+                if (overlayTitle) overlayTitle.textContent = 'Live Stream Ready';
+                if (overlaySub) overlaySub.textContent = 'Click to watch the live stream in HD';
+                if (overlaySpinner) overlaySpinner.classList.add('hidden');
+              }
+            } else {
+              // No streams found even client-side - update overlay
+              const overlayTitle = document.getElementById('overlay-title');
+              const overlaySub = document.getElementById('overlay-subtitle');
+              const overlaySpinner = document.getElementById('overlay-spinner');
+              if (overlayTitle) overlayTitle.textContent = 'Stream Coming Soon';
+              if (overlaySub) overlaySub.textContent = 'Please refresh near match time for available streams';
+              if (overlaySpinner) overlaySpinner.classList.add('hidden');
+            }
+          } catch (err) {
+            console.warn('Live stream sync error:', err);
+          }
+        }
+
+        // Run sync on load to guarantee all sources are present
+        syncAllSources();
+      </script>
+    </div>
+  </div>
+</Layout>

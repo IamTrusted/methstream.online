@@ -1,0 +1,405 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import seedDB from "../../data/manual-pages.json";
+import { getPageById } from "../../utils/manualStore.js";
+
+export const prerender = false;
+
+const { pageId } = Astro.params;
+const platform = Astro.locals?.runtime || Astro.platform || null;
+let page = null;
+try {
+  page = await getPageById({ pageId, platform });
+} catch(e) {}
+if (!page) {
+  page = (seedDB.pages || []).find(p => p.id === pageId);
+}
+const SITE_NAME = import.meta.env.PUBLIC_SITE_NAME || "Methstreams";
+const PUBLIC_BASE_URL = (import.meta.env.PUBLIC_BASE_URL || Astro.site?.toString() || "https://methstream.online").replace(/\/$/, '');
+
+const title = page ? `${page.title} Live Stream - Methstreams` : `Live Stream - Methstreams`;
+const description = page
+  ? `Watch ${page.title} live stream in HD on Methstreams. The best Buffstreams & Crackstreams alternative with high-speed multi-server feeds.`
+  : `Watch free live sports streams in HD on Methstreams, the best Buffstreams & Crackstreams alternative.`;
+
+const cleanTitle = page?.title || "Live Match";
+const displayHome = cleanTitle.includes(" - ") ? cleanTitle.split(" - ")[0] : (cleanTitle.includes(" vs ") ? cleanTitle.split(" vs ")[0] : cleanTitle);
+const displayAway = cleanTitle.includes(" - ") ? cleanTitle.split(" - ")[1] : (cleanTitle.includes(" vs ") ? cleanTitle.split(" vs ")[1] : "Live Stream");
+const sportFromId = (pageId && pageId.includes("-")) ? pageId.charAt(0) : "S";
+
+const truncateText = (text, maxLength) => {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trim()}...`;
+};
+
+const pageTitle = page ? truncateText(`${cleanTitle} | ${SITE_NAME} Live Stream`, 60) : title;
+const pageDesc = truncateText(description, 160);
+const canonicalUrl = PUBLIC_BASE_URL ? `${PUBLIC_BASE_URL.replace(/\/$/, '')}/s/${pageId}/` : Astro.url.href;
+
+// Extract streams from page.iframe string
+let manualStreams = [];
+if (page && page.iframe) {
+  const rawStr = page.iframe.trim();
+  
+  // 1. Match all <iframe ...> tags
+  const iframeMatches = [...rawStr.matchAll(/<iframe[^>]*src=["']([^"']+)["'][^>]*>.*?<\/iframe>|<iframe[^>]*src=["']([^"']+)["'][^>]*\/>|<iframe[^>]*src=["']([^"']+)["'][^>]*>/gi)];
+  
+  if (iframeMatches.length > 0) {
+    manualStreams = iframeMatches.map((m, i) => {
+      const src = m[1] || m[2] || m[3];
+      return {
+        idx: i,
+        title: `Stream ${i + 1}`,
+        hd: i === 0,
+        language: 'English',
+        viewers: i === 0 ? 3 : null,
+        content: m[0].toLowerCase().includes('</iframe>') ? m[0] : `${m[0]}</iframe>`,
+        src: src
+      };
+    });
+  } else {
+    // 2. Extract all URLs from the text
+    const urlMatches = [...rawStr.matchAll(/(https?:\/\/[^\s"'<>\n]+)/gi)];
+    if (urlMatches.length > 0) {
+      const uniqueUrls = [...new Set(urlMatches.map(m => m[1]))];
+      manualStreams = uniqueUrls.map((u, i) => ({
+        idx: i,
+        title: `Stream ${i + 1}`,
+        hd: i === 0,
+        language: 'English',
+        viewers: i === 0 ? 3 : null,
+        content: `<iframe src="${u}" style="width:100%;height:100%;border:none;" allowfullscreen scrolling="no"></iframe>`,
+        src: u
+      }));
+    } else if (rawStr) {
+      manualStreams = [{
+        idx: 0,
+        title: 'Stream 1',
+        hd: true,
+        language: 'English',
+        viewers: 3,
+        content: rawStr,
+        src: ''
+      }];
+    }
+  }
+}
+
+if (manualStreams.length === 0) {
+  manualStreams = [
+    { idx: 0, title: 'Stream 1', hd: true, language: 'English', viewers: 3, content: '', src: '' },
+    { idx: 1, title: 'Stream 2', hd: false, language: 'English', viewers: null, content: '', src: '' }
+  ];
+}
+---
+
+<Layout
+  title={pageTitle}
+  description={pageDesc}
+  keywords={`${displayHome}, ${displayAway}, ${SITE_NAME}, live stream, watch online, free sports`}
+  canonical={canonicalUrl}
+>
+  <script type="application/ld+json" is:inline set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    "name": cleanTitle,
+    "description": pageDesc,
+    "image": "https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg",
+    "location": {
+      "@type": "VirtualLocation",
+      "url": Astro.url.href
+    },
+    "sport": sportFromId,
+    "eventStatus": "https://schema.org/EventScheduled",
+    "eventAttendanceMode": "https://schema.org/OnlineEventAttendanceMode",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock",
+      "url": Astro.url.href
+    },
+    "url": Astro.url.href
+  })} slot="head" />
+  <script type="application/ld+json" is:inline set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": PUBLIC_BASE_URL || "/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": sportFromId,
+        "item": `${PUBLIC_BASE_URL || ''}/#${sportFromId.toLowerCase()}`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": cleanTitle,
+        "item": Astro.url.href
+      }
+    ]
+  })} slot="head" />
+
+  <div class="pt-10 px-4 max-w-3xl mx-auto text-left">
+    <div
+      class="space-y-6 text-center relative p-6 sm:p-8 rounded-2xl theme-card border border-white/10 shadow-2xl backdrop-blur-md"
+    >
+      <!-- Breadcrumbs -->
+      <nav class="flex text-xs sm:text-sm theme-text-secondary mb-4 justify-start" aria-label="Breadcrumb">
+        <ol class="flex items-center space-x-2">
+          <li><a href="/" class="hover:text-brand">Home</a></li>
+          <li class="flex items-center gap-2">
+            <span>/</span>
+            <span class="theme-text-primary font-bold">{sportFromId}</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <span>/</span>
+            <span class="opacity-60">{cleanTitle}</span>
+          </li>
+        </ol>
+      </nav>
+
+      <!-- Page Title -->
+      <h1
+        class="text-2xl sm:text-4xl font-black theme-text-primary animate-fadeIn wrap-break-word leading-tight"
+      >
+        {cleanTitle} Live Stream
+      </h1>
+
+      <!-- League and Date Info -->
+      <div
+        class="flex flex-col sm:flex-row justify-center items-center gap-3 text-sm theme-text-secondary mt-2 animate-fadeIn"
+      >
+        <span class="px-4 py-1.5 rounded-full bg-blue-600 font-black text-white shadow-lg shadow-blue-500/30 uppercase tracking-wider"
+          >{sportFromId}</span
+        >
+        <span class="sm:ml-2 font-medium theme-card px-3 py-1.5 rounded-full border border-white/5">
+          • Live Now
+        </span>
+      </div>
+
+      <!-- Player Section -->
+      <div class="w-full mt-6 flex flex-col gap-4">
+        <div class="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-white/5 relative group">
+          {page && page.iframe ? (
+            <div id="player-container" class="w-full h-full flex flex-col items-center justify-center bg-neutral-900 relative">
+              <div class="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/d/d3/Soccerball.svg')] bg-center bg-no-repeat opacity-5 blur-sm"></div>
+
+              <!-- Click overlay with play button -->
+              <div
+                id="initial-watch-overlay"
+                class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/90 cursor-pointer group/overlay"
+              >
+                <div class="relative z-10 flex flex-col items-center gap-6 p-4">
+                  <div class="w-24 h-24 bg-brand rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(243,168,51,0.4)] group-hover/overlay:scale-110 transition-transform duration-500">
+                    <svg class="w-12 h-12 text-black translate-x-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"></path>
+                    </svg>
+                  </div>
+
+                  <div class="text-center">
+                    <h3 class="text-2xl font-black theme-text-primary uppercase italic mb-2 tracking-tight">Live Stream Ready</h3>
+                    <p class="theme-text-secondary text-sm mb-4 max-w-[250px] mx-auto">Click to watch {displayHome} vs {displayAway} in HD</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Player iframe wrapper -->
+              <div id="player-wrapper" class="w-full h-full absolute inset-0"></div>
+            </div>
+          ) : (
+            <div class="flex flex-col items-center justify-center h-full text-white/50 gap-4 p-8">
+              <span class="text-6xl animate-pulse">📡</span>
+              <p class="font-bold text-lg">Page not found or stream not configured</p>
+              <p class="text-sm opacity-60">Contact the admin to set up this page</p>
+            </div>
+          )}
+
+          <!-- Loading Overlay -->
+          <div id="player-loader" class="absolute inset-0 bg-black/80 flex items-center justify-center z-20 hidden">
+            <div class="flex flex-col items-center gap-3">
+              <div class="w-10 h-10 border-4 border-brand border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-brand font-bold text-sm">Loading stream...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stream Source List UI matching reference screenshot -->
+        <div class="w-full mt-4 rounded-xl border border-yellow-700/40 bg-[#0d0d0d] p-1.5 flex flex-col gap-1.5 shadow-2xl">
+          {manualStreams.map((stream, idx) => (
+            <div
+              class={`stream-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                idx === 0
+                  ? 'bg-[#141417] border border-red-600 shadow-md'
+                  : 'bg-[#121214]/70 border border-white/5 hover:bg-[#18181c] hover:border-white/10'
+              }`}
+              data-idx={idx}
+              data-content={stream.content}
+              data-src={stream.src}
+            >
+              <!-- Left indicator bar for active stream -->
+              <div class={`active-indicator absolute left-0 top-0 bottom-0 w-1.5 bg-red-600 rounded-l-lg ${idx === 0 ? '' : 'hidden'}`}></div>
+
+              <!-- Left section: HD/SD badge + Title + Current text -->
+              <div class="flex items-center gap-3 pl-2">
+                <span class={`quality-badge text-[11px] font-black px-1.5 py-0.5 rounded border uppercase ${
+                  stream.hd 
+                    ? 'bg-red-950/80 text-red-500 border-red-700/60' 
+                    : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                }`}>
+                  {stream.hd ? 'HD' : 'SD'}
+                </span>
+
+                <span class="stream-title font-bold text-sm text-white">
+                  {stream.title}
+                </span>
+
+                <span class={`current-badge text-red-500 font-semibold text-xs flex items-center gap-1 ${idx === 0 ? '' : 'hidden'}`}>
+                  <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                  Current
+                </span>
+              </div>
+
+              <!-- Right section: Live viewer count + Language -->
+              <div class="flex items-center gap-4 text-xs font-medium">
+                <span class={`viewer-count text-red-500 flex items-center gap-1 ${stream.viewers ? '' : 'hidden'}`}>
+                  <svg class="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                  </svg>
+                  <span class="count-num">{stream.viewers || 3}</span>
+                </span>
+
+                <span class="text-neutral-300 flex items-center gap-1.5">
+                  <svg class="w-3.5 h-3.5 opacity-80 text-neutral-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                  </svg>
+                  {stream.language || 'English'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- Match Info Section -->
+    <div class="space-y-4 mx-auto mb-16 max-w-3xl">
+      <div class="theme-card rounded-2xl p-6 sm:p-8 shadow-xl border backdrop-blur-sm border-white/10">
+        <h2 class="text-xl font-black theme-text-primary uppercase tracking-wider mb-4 border-b pb-2 border-brand/30">
+          {cleanTitle} - Live Stream Details
+        </h2>
+        <div class="space-y-4 theme-text-secondary text-sm sm:text-base">
+          <p>
+            Welcome to the official live stream for <strong class="theme-text-primary">{cleanTitle}</strong>.
+            Watch the match in high definition with multiple backup links available if the main player doesn't work.
+          </p>
+          <p>
+            <strong class="theme-text-primary">How to watch:</strong> Click the play button in the center of the video player or select any of the stream options below.
+          </p>
+          <p>
+            <strong class="theme-text-primary">Compatible devices:</strong> This stream works on all devices including mobile phones,
+            tablets, desktop computers, and smart TV browsers. No signup or app installation required.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    (function() {
+      const overlay = document.getElementById('initial-watch-overlay');
+      const wrapper = document.getElementById('player-wrapper');
+      const loader = document.getElementById('player-loader');
+      const rows = document.querySelectorAll('.stream-row');
+
+      if (!wrapper) return;
+
+      function loadStreamContent(content, src) {
+        if (loader) loader.classList.remove('hidden');
+        if (overlay) overlay.style.display = 'none';
+
+        wrapper.innerHTML = '';
+        
+        if (content && content.trim()) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = content;
+          const iframe = tmp.querySelector('iframe');
+          if (iframe) {
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+            iframe.setAttribute('allowfullscreen', 'true');
+            wrapper.appendChild(iframe);
+          } else {
+            wrapper.innerHTML = content;
+          }
+        } else if (src && src.trim()) {
+          const iframe = document.createElement('iframe');
+          iframe.src = src;
+          iframe.style.width = '100%';
+          iframe.style.height = '100%';
+          iframe.style.border = 'none';
+          iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+          iframe.setAttribute('allowfullscreen', 'true');
+          wrapper.appendChild(iframe);
+        }
+
+        setTimeout(() => { if (loader) loader.classList.add('hidden'); }, 1000);
+      }
+
+      if (overlay && rows.length > 0) {
+        overlay.addEventListener('click', () => {
+          const firstRow = rows[0];
+          const content = firstRow.getAttribute('data-content');
+          const src = firstRow.getAttribute('data-src');
+          loadStreamContent(content, src);
+        });
+      }
+
+      rows.forEach(row => {
+        row.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const content = row.getAttribute('data-content');
+          const src = row.getAttribute('data-src');
+          const idx = row.getAttribute('data-idx');
+
+          // Update row active state
+          rows.forEach((r, i) => {
+            const activeInd = r.querySelector('.active-indicator');
+            const currBadge = r.querySelector('.current-badge');
+            const viewerCnt = r.querySelector('.viewer-count');
+
+            if (i.toString() === idx) {
+              r.className = 'stream-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 bg-[#141417] border border-red-600 shadow-md';
+              if (activeInd) activeInd.classList.remove('hidden');
+              if (currBadge) currBadge.classList.remove('hidden');
+              if (viewerCnt) viewerCnt.classList.remove('hidden');
+            } else {
+              r.className = 'stream-row relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all duration-150 bg-[#121214]/70 border border-white/5 hover:bg-[#18181c] hover:border-white/10';
+              if (activeInd) activeInd.classList.add('hidden');
+              if (currBadge) currBadge.classList.add('hidden');
+              if (viewerCnt) viewerCnt.classList.add('hidden');
+            }
+          });
+
+          loadStreamContent(content, src);
+
+          const container = document.getElementById('player-container');
+          if (container) {
+            container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
+    })();
+  </script>
+</Layout>

@@ -1,0 +1,115 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const posts = [
+  {
+    slug: "streameast-2026-best-free-sports-streams",
+    title: "Streameast Free Sports Streams Guide 2026",
+    description: "Streameast guide for 2026 with free HD soccer, NFL, NBA and UFC streams, backup links and easy access on every device.",
+    date: "2026-06-01",
+    category: "Featured"
+  },
+  {
+    slug: "footybite-alternative-top-free-soccer-streams-2026",
+    title: "Footybite Free Soccer Streams Guide 2026",
+    description: "Footybite guide for free Premier League, La Liga and Champions League streams in HD with smooth access on mobile and desktop.",
+    date: "2026-05-30",
+    category: "Alternatives"
+  },
+  {
+    slug: "methstreams-alternative-watch-sports-free-hd-2026",
+    title: "MethStreams Free HD Sports Guide 2026",
+    description: "MethStreams guide for 2026 with free HD NFL, NBA, UFC and soccer streams, plus backup links for every big match.",
+    date: "2026-05-28",
+    category: "Alternatives"
+  },
+  {
+    slug: "yacine-tv-free-sports-streams-2026",
+    title: "Yacine TV Free Sports Guide 2026",
+    description: "Yacine TV guide for free HD soccer and sports on mobile, with MethStreams as a quick browser-based alternative.",
+    date: "2026-06-10",
+    category: "Alternatives"
+  },
+  {
+    slug: "yalla-live-alternative-soccer-streams-2026",
+    title: "Yalla Live Free Soccer Guide 2026",
+    description: "Yalla Live guide for free HD football, covering Arab and European leagues with MethStreams as a simple alternative.",
+    date: "2026-06-09",
+    category: "Alternatives"
+  },
+  {
+    slug: "kora-live-free-football-streams-2026",
+    title: "Kora Live Free Football Guide 2026",
+    description: "Kora Live guide for free HD football, including Premier League, Champions League and Arab leagues with fast access.",
+    date: "2026-06-08",
+    category: "Alternatives"
+  },
+  {
+    slug: "rojadirecta-alternative-free-streams-2026",
+    title: "Rojadirecta Free Streams Guide 2026",
+    description: "Rojadirecta guide for free HD soccer streams, with La Liga, Champions League and more alongside MethStreams alternatives.",
+    date: "2026-06-07",
+    category: "Alternatives"
+  },
+  {
+    slug: "soccer100-free-football-streams-2026",
+    title: "Soccer100 Free Football Guide 2026",
+    description: "Soccer100 guide for free HD Premier League, La Liga and Champions League streams with fast access and no signup.",
+    date: "2026-06-06",
+    category: "Alternatives"
+  },
+  {
+    slug: "sportsurge-alternative-live-streams-2026",
+    title: "Sportsurge Free Live Sports Guide 2026",
+    description: "Sportsurge guide for free HD NFL, NBA, UFC and soccer streams with MethStreams backup options and quick access.",
+    date: "2026-06-05",
+    category: "Alternatives"
+  },
+  {
+    slug: "totalsportek-free-soccer-streams-2026",
+    title: "Totalsportek Free Soccer Guide 2026",
+    description: "Totalsportek guide for free HD soccer streams, including Premier League and Champions League with broader sports coverage too.",
+    date: "2026-06-04",
+    category: "Alternatives"
+  }
+];
+
+const title = "Streaming Guides | MethStreams | Streameast | Footybite"
+const description = "Read fresh streaming guides for MethStreams, Streameast and Footybite, with football, NFL, NBA and UFC coverage in 2026.";
+---
+
+<Layout title={title} description={description}>
+  <div class="max-w-4xl mx-auto px-4 py-16">
+    <h1 class="text-4xl sm:text-5xl font-black mb-4 theme-text-primary italic uppercase tracking-tighter">
+      Streaming <span class="text-brand">Guides</span>
+    </h1>
+    <p class="theme-text-secondary mb-12 text-lg max-w-2xl">
+      Updated guides for MethStreams, Streameast and Footybite with football, NFL, NBA and UFC coverage for 2026.
+    </p>
+
+    <div class="grid gap-8">
+      {posts.map(post => (
+        <article class="theme-card p-6 sm:p-8 rounded-2xl border border-[var(--border-color)] hover:border-brand/50 transition-all group shadow-lg">
+          <div class="flex items-center gap-4 mb-4">
+            <span class="px-3 py-1 rounded-full bg-brand/10 text-brand text-xs font-bold uppercase tracking-wider">
+              {post.category}
+            </span>
+            <time class="text-xs theme-text-secondary">{post.date}</time>
+          </div>
+          <a href={`/blog/${post.slug}`} class="block">
+            <h2 class="text-2xl sm:text-3xl font-black theme-text-primary mb-4 group-hover:text-brand transition-colors tracking-tight italic uppercase">
+              {post.title}
+            </h2>
+          </a>
+          <p class="theme-text-secondary leading-relaxed mb-6">
+            {post.description}
+          </p>
+          <a href={`/blog/${post.slug}`} class="inline-flex items-center gap-2 text-brand font-bold uppercase text-sm tracking-widest hover:gap-3 transition-all">
+            Read More
+            <span>→</span>
+          </a>
+        </article>
+      ))}
+    </div>
+  </div>
+</Layout>

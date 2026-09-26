@@ -1,0 +1,614 @@
+---
+import Layout from "../layouts/Layout.astro";
+import slugify from "../utils/slugify";
+import { fetchSports, fetchMatches, ENDPOINTS } from "../utils/api";
+
+export const prerender = false;
+
+interface APIMatch {
+    id: string;
+    title: string;
+    category: string;
+    date: number;
+    poster?: string;
+    popular: boolean;
+    teams?: {
+        home?: {
+            name: string;
+            badge: string;
+        },
+        away?: {
+            name: string;
+            badge: string;
+        }
+    };
+    sources: {
+        source: string;
+        id: string;
+    }[];
+}
+
+interface Sport {
+    id: string;
+    name: string;
+}
+
+const now = Date.now();
+const fallbackFootballMatches = [
+  { id: 'r1', title: 'Real Madrid vs Barcelona', category: 'football', date: now - 86400000, popular: true },
+  { id: 'r2', title: 'Manchester United vs Liverpool', category: 'football', date: now, popular: true },
+  { id: 'r3', title: 'Bayern Munich vs Borussia Dortmund', category: 'football', date: now + 3600000, popular: true },
+  { id: 'r4', title: 'Chelsea vs Arsenal', category: 'football', date: now + 7200000, popular: true },
+  { id: 'r5', title: 'PSG vs Marseille', category: 'football', date: now + 86400000, popular: true },
+  { id: 'r6', title: 'Juventus vs Inter Milan', category: 'football', date: now + 93600000, popular: true }
+];
+
+let allSports: { sport: string; sport_id: string; league_schedule: APIMatch[] }[] = [];
+try {
+  const [sportsData, matchesData] = await Promise.all([
+    fetchSports(),
+    fetchMatches('all')
+  ]);
+
+  if (sportsData.length > 0) {
+    // Filter matches for Today and Tomorrow only
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayAfterTomorrow = new Date(today);
+    dayAfterTomorrow.setDate(today.getDate() + 2); // This covers today and tomorrow
+
+    const filteredMatches = matchesData.filter(m => {
+      const matchDate = new Date(m.date);
+      return matchDate >= today && matchDate < dayAfterTomorrow;
+    });
+
+    // Group matches by category
+    const groupedMatches = sportsData.map(sport => {
+      const hasAnyMatchesInAPI = matchesData.some(m => m.category === sport.id);
+      const sportMatches = filteredMatches.filter(m => m.category === sport.id);
+      return {
+        sport: sport.name,
+        sport_id: sport.id,
+        league_schedule: sportMatches,
+        isVisibleInGrid: hasAnyMatchesInAPI
+      };
+    }).filter(s => s.isVisibleInGrid);
+
+    // Only keep Football for Streameast page
+    allSports = groupedMatches.filter(s => s.sport_id === 'football');
+  }
+  
+  // Fallback if no matches from API
+  if (allSports.length === 0 || allSports[0].league_schedule.length === 0) {
+    allSports = [{
+      sport: 'Football',
+      sport_id: 'football',
+      league_schedule: fallbackFootballMatches
+    }];
+  }
+} catch (error) {
+  console.error("Error fetching schedule for streameast landing page:", error);
+  // Use fallback on error
+  allSports = [{
+    sport: 'Football',
+    sport_id: 'football',
+    league_schedule: fallbackFootballMatches
+  }];
+}
+
+const sportIcons: { [key: string]: string } = {
+  football: "⚽",
+  basketball: "🏀",
+  baseball: "⚾",
+  hockey: "🏒",
+  mma: "🥋",
+  boxing: "🥊",
+  tennis: "🎾",
+  cricket: "🏏",
+  rugby: "🏉",
+  volleyball: "🏐",
+  motorsports: "🏎️",
+  fight: "🥊",
+  american: "🏈",
+  "american-football": "🏈",
+  golf: "⛳",
+  snooker: "🎱",
+  darts: "🎯"
+};
+
+const formatDateEnglish = (date: Date) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  const dayName = days[date.getDay()];
+  const day = date.getDate().toString().padStart(2, '0');
+  const monthName = months[date.getMonth()];
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  
+  return `${dayName}, ${monthName} ${day} - ${hours}:${minutes}`;
+};
+
+const title = "StreamEast Alternative - Methstreams Live Sports HD";
+const description = "StreamEast alternative: Methstreams brings free live sports feeds like Buffstreams & Crackstreams. Stream Premier League, La Liga, NFL, NBA & UFC in HD.";
+const keywords = "streameast, streameast alternative, methstreams, buffstreams, crackstreams, free soccer streams, watch sports hd free, live football stream";
+---
+
+<Layout title={title} description={description} keywords={keywords}>
+  <slot name="head">
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": title,
+      "description": description,
+      "image": "/favicon.svg",
+      "author": {
+        "@type": "Organization",
+        "name": "Methstreams"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Methstreams",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://methstream.online/favicon.svg"
+        }
+      },
+      "datePublished": "2026-06-08T14:00:00+05:00",
+      "dateModified": "2026-06-08T14:00:00+05:00"
+    })} />
+    
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Streameast?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Streameast is a free sports streaming platform popular for live soccer coverage especially Spanish football leagues."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Streameast free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes completely free. No signup, no payment required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What sports are on Streameast?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Soccer, NFL, NBA, UFC, MLB and more in HD quality."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Streameast down?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "If Streameast is unavailable, watch free on Methstreams instead."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What devices work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Works on all iOS, Android, laptop and desktop devices."
+          }
+        }
+      ]
+    })} />
+  </slot>
+
+  <!-- Hero Section -->
+  <div class="relative overflow-hidden py-16 sm:py-24 border-b border-[var(--border-color)]">
+    <!-- Decorative background glow -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden">
+      <div class="absolute -top-40 -left-40 w-96 h-96 bg-brand/10 rounded-full blur-[120px]"></div>
+      <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-brand/5 rounded-full blur-[120px]"></div>
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[300px] bg-gradient-to-r from-brand/5 to-emerald-500/5 rounded-full blur-[100px]"></div>
+    </div>
+
+    <div class="max-w-5xl mx-auto px-4 text-center relative z-10">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand/10 border border-brand/20 text-brand text-xs font-black uppercase tracking-widest mb-6 animate-pulse">
+        ⚡ Best Streameast Alternative
+      </div>
+      
+      <h1 class="text-3xl sm:text-6xl font-black tracking-tight leading-tight uppercase italic theme-text-primary mb-6">
+        Streameast – <span class="text-brand">Top Free Soccer</span> Streaming
+      </h1>
+      
+      <p class="text-base sm:text-xl theme-text-secondary max-w-3xl mx-auto leading-relaxed mb-8">
+        Searching for a working live soccer stream? Watch La Liga, Champions League, and all global football matches in HD. Experience a reliable and smooth streaming experience.
+      </p>
+
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#live-schedule" class="w-full sm:w-auto inline-block px-8 py-4 bg-brand text-black font-black rounded-xl text-lg transition-all hover:bg-brand/90 hover:scale-105 shadow-xl hover:shadow-brand/20">
+          Watch Live Soccer Now →
+        </a>
+        <a href="/" class="w-full sm:w-auto inline-block px-8 py-4 bg-white/5 border border-white/10 theme-text-primary font-bold rounded-xl text-lg transition-all hover:bg-white/10 hover:border-brand/40">
+          Home Page
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-5xl mx-auto px-4 py-12">
+    <!-- Intro Box -->
+    <div class="theme-card p-6 sm:p-8 rounded-2xl border border-white/10 mb-16 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full blur-2xl pointer-events-none"></div>
+      <p class="text-lg sm:text-xl leading-relaxed mb-0 font-semibold theme-text-secondary italic">
+        "European football coverage includes all major leagues with HD streaming options. Multiple backup links ensure uninterrupted viewing for every match."
+      </p>
+    </div>
+    
+    <!-- Detailed Article Section -->
+    <div class="space-y-12 mb-16">
+      <div class="theme-card p-6 sm:p-8 rounded-2xl border border-white/10">
+        <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider theme-text-primary mb-6 border-b border-brand pb-4">Football Streaming Platform</h2>
+        <p class="theme-text-secondary leading-relaxed mb-4 text-base sm:text-lg">
+          This platform aggregates football streams from multiple sources. European leagues including La Liga, Premier League, Champions League, Serie A, and Bundesliga are covered throughout their seasons.
+        </p>
+        <p class="theme-text-secondary leading-relaxed mb-4 text-base sm:text-lg">
+          International tournaments like the World Cup and Euro Championships receive comprehensive coverage. Group stage matches through finals have multiple streaming options available.
+        </p>
+        <p class="theme-text-secondary leading-relaxed text-base sm:text-lg">
+          The interface displays matches by date and competition. Select any fixture to view available streams sorted by quality and language options.
+        </p>
+      </div>
+
+      <div class="theme-card p-6 sm:p-8 rounded-2xl border border-white/10">
+        <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider theme-text-primary mb-6 border-b border-brand pb-4">Platform Features</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-3">
+            <h3 class="text-xl font-bold text-brand">HD Quality</h3>
+            <p class="theme-text-secondary leading-relaxed">Most major matches stream in 1080p resolution. Quality depends on source availability for each fixture.</p>
+          </div>
+          <div class="space-y-3">
+            <h3 class="text-xl font-bold text-brand">Backup Links</h3>
+            <p class="theme-text-secondary leading-relaxed">Each match lists multiple stream sources. Switch between options if one buffers or goes offline.</p>
+          </div>
+          <div class="space-y-3">
+            <h3 class="text-xl font-bold text-brand">Mobile Compatible</h3>
+            <p class="theme-text-secondary leading-relaxed">Streams play in mobile browsers on iOS and Android devices without requiring app downloads.</p>
+          </div>
+          <div class="space-y-3">
+            <h3 class="text-xl font-bold text-brand">No Registration</h3>
+            <p class="theme-text-secondary leading-relaxed">Access is free without account creation. Select a match and start watching immediately.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="theme-card p-6 sm:p-8 rounded-2xl border border-white/10">
+        <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider theme-text-primary mb-6 border-b border-brand pb-4">Available Competitions</h2>
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-base sm:text-lg">
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Premier League
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> La Liga
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Champions League
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Europa League
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Serie A
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Bundesliga
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Ligue 1
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> World Cup
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Euro Championship
+          </li>
+          <li class="theme-text-secondary flex items-center gap-2">
+            <span class="text-brand">⚽</span> Copa America
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Live Matches Schedule widget -->
+    <div id="live-schedule" class="mb-16 scroll-mt-20">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 border-b border-[var(--border-color)] pb-4">
+        <div>
+          <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider theme-text-primary italic">
+            ⚽ Live Football <span class="text-brand">Matches</span>
+          </h2>
+          <p class="theme-text-secondary text-sm mt-1">Watch live soccer streams instantly.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">Live 24/7 Schedule</span>
+        </div>
+      </div>
+
+      <!-- Matches list container -->
+      <div class="theme-card rounded-2xl p-4 sm:p-6 shadow-xl border backdrop-blur-sm">
+        {allSports.length > 0 ? (
+          <div class="sport-match-list space-y-4">
+            {allSports[0].league_schedule.map((event: APIMatch) => {
+              const home = event.teams?.home?.name || event.title.split(' vs ')[0];
+              const away = event.teams?.away?.name || event.title.split(' vs ')[1];
+
+              const eventDate = new Date(event.date);
+              const eventTimeStr = eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+              const eventDateFormatted = formatDateEnglish(eventDate);
+
+              return (
+                <a
+                  href={`/live/football/${slugify(`${event.title}`)}/${event.id}/`}
+                  class="group grid grid-cols-12 items-center theme-card theme-card-hover transition-all duration-300 rounded-xl px-4 py-5 border shadow-md gap-3"
+                >
+                  {/* Hidden H3 for SEO */}
+                  <h3 class="sr-only">{home} vs {away} Live Stream</h3>
+                  
+                  {/* HOME TEAM */}
+                  <div class="col-span-4 flex items-center gap-3 min-w-0">
+                    <div class="relative shrink-0">
+                      {event.teams?.home?.badge ? (
+                        <img
+                          src={ENDPOINTS.BADGE(event.teams.home.badge)}
+                          alt={home}
+                          class="w-8 h-8 sm:w-12 sm:h-12 object-contain drop-shadow-md"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div class="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center bg-neutral-500/10 rounded-full text-base sm:text-xl">
+                          ⚽
+                        </div>
+                      )}
+                    </div>
+                    <span class="theme-text-primary font-black text-sm sm:text-lg tracking-tight leading-tight break-words overflow-hidden">
+                      {home}
+                    </span>
+                  </div>
+
+                  {/* TIME & CTA */}
+                  <div class="col-span-4 flex flex-col items-center justify-center gap-1">
+                    <div 
+                      class="match-status-container flex flex-col items-center" 
+                      data-timestamp={event.date}
+                    >
+                      <span class="text-[10px] sm:text-xs font-black theme-text-secondary uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-full border border-white/5 status-text">
+                        {eventTimeStr}
+                      </span>
+                    </div>
+                    <span class="theme-text-secondary text-[8px] sm:text-[10px] font-bold uppercase tracking-tight text-center">
+                      {eventDateFormatted}
+                    </span>
+                    <div class="mt-2">
+                      <span class="bg-brand/10 text-brand text-[9px] sm:text-[10px] px-3 py-1.5 rounded-lg uppercase font-black group-hover:bg-brand group-hover:text-black transition-all duration-300 shadow-sm border border-brand/20">
+                        Watch Live
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* AWAY TEAM */}
+                  <div class="col-span-4 flex items-center justify-end gap-3 text-right min-w-0">
+                    <span class="theme-text-primary font-black text-sm sm:text-lg tracking-tight leading-tight break-words overflow-hidden">
+                      {away}
+                    </span>
+                    <div class="relative shrink-0">
+                      {event.teams?.away?.badge ? (
+                        <img
+                          src={ENDPOINTS.BADGE(event.teams.away.badge)}
+                          alt={away}
+                          class="w-8 h-8 sm:w-12 sm:h-12 object-contain drop-shadow-md"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div class="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center bg-neutral-500/10 rounded-full text-base sm:text-xl">
+                          ⚽
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        ) : (
+          <div class="py-12 text-center">
+            <span class="text-4xl block mb-2">⚽</span>
+            <p class="theme-text-primary font-bold text-lg">Football Matches Currently Offline</p>
+            <p class="theme-text-secondary text-sm">Please refresh or visit near kickoff times to watch live streams!</p>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="mb-16">
+      <h2 class="text-2xl sm:text-3xl font-black uppercase text-center mb-8 theme-text-primary italic">
+        Frequently Asked <span class="text-brand">Questions</span>
+      </h2>
+      <div class="max-w-4xl mx-auto space-y-4">
+        <!-- FAQ 1 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>What is Streameast?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Streameast is a free sports streaming platform popular for live soccer coverage especially Spanish football leagues.
+            </div>
+          </div>
+        </div>
+        
+        <!-- FAQ 2 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Is Streameast free?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Yes completely free. No signup, no payment required.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>What sports are on Streameast?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Soccer, NFL, NBA, UFC, MLB and more in HD quality.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Is Streameast down?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              If Streameast is unavailable, watch free on Methstreams instead.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 5 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>What devices work?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Works on all iOS, Android, laptop and desktop devices.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+      <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+        <h3 class="text-lg font-black text-brand mb-2 uppercase">Stream Reliability</h3>
+        <p class="theme-text-secondary text-sm leading-relaxed">Multiple backup links for each match. Switch sources if one goes down during the game.</p>
+      </div>
+      <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+        <h3 class="text-lg font-black text-brand mb-2 uppercase">Device Support</h3>
+        <p class="theme-text-secondary text-sm leading-relaxed">Browser-based streaming works on phones, tablets, laptops, and desktop computers.</p>
+      </div>
+      <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+        <h3 class="text-lg font-black text-brand mb-2 uppercase">Video Quality</h3>
+        <p class="theme-text-secondary text-sm leading-relaxed">HD streams available for most fixtures. Quality varies by source and match popularity.</p>
+      </div>
+    </div>
+
+    <!-- Final CTA -->
+    <div class="theme-card p-10 rounded-3xl border border-white/10 bg-white/5 text-center relative overflow-hidden mb-16">
+      <div class="absolute -top-24 -left-24 w-48 h-48 bg-brand/5 rounded-full blur-[60px] pointer-events-none"></div>
+      <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-brand/5 rounded-full blur-[60px] pointer-events-none"></div>
+      
+      <h2 class="text-3xl sm:text-4xl font-black uppercase mb-4 theme-text-primary italic">Watch Football Now</h2>
+      <p class="theme-text-secondary text-base sm:text-lg max-w-2xl mx-auto mb-8 leading-relaxed">
+        Browse today's schedule and find your match. HD streams ready with backup options.
+      </p>
+      
+      <a href="/" class="inline-block px-10 py-5 bg-brand text-black font-black rounded-xl text-xl transition-all hover:bg-brand/90 hover:scale-105 shadow-xl hover:shadow-brand/20">
+        View All Sports
+      </a>
+    </div>
+  </div>
+
+  <!-- Client-side script for FAQ Accordion & Countdown -->
+  <script is:inline>
+    // FAQ Accordion
+    const questions = document.querySelectorAll('.faq-question');
+    questions.forEach(q => {
+      q.addEventListener('click', () => {
+        const item = q.parentElement;
+        const answer = item.querySelector('.faq-answer');
+        const icon = q.querySelector('.faq-icon');
+        const isOpen = item.classList.contains('active');
+
+        // Close all other accordion items
+        document.querySelectorAll('.faq-item').forEach(otherItem => {
+          otherItem.classList.remove('active');
+          const otherAnswer = otherItem.querySelector('.faq-answer');
+          const otherIcon = otherItem.querySelector('.faq-icon');
+          if (otherAnswer) otherAnswer.style.maxHeight = '0px';
+          if (otherIcon) otherIcon.style.transform = 'rotate(0deg)';
+        });
+
+        // Toggle clicked item
+        if (!isOpen) {
+          item.classList.add('active');
+          answer.style.maxHeight = answer.scrollHeight + 'px';
+          icon.style.transform = 'rotate(180deg)';
+        }
+      });
+    });
+
+    // Match Status & Countdown Timer
+    function updateMatchStatuses() {
+      const containers = document.querySelectorAll('.match-status-container');
+      const now = new Date().getTime();
+
+      containers.forEach(container => {
+        const timestamp = parseInt(container.getAttribute('data-timestamp'));
+        const statusText = container.querySelector('.status-text');
+        const diff = timestamp - now;
+
+        if (diff <= 0) {
+          // Match is LIVE
+          if (!statusText.classList.contains('is-live')) {
+            statusText.innerHTML = `<span class="flex items-center gap-1.5 text-red-500"><span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>LIVE</span>`;
+            statusText.classList.add('is-live');
+            statusText.classList.remove('theme-text-secondary');
+            statusText.parentElement.parentElement.parentElement.classList.add('border-red-500/30');
+          }
+        } else {
+          // Match is Upcoming - Show Countdown
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+          let countdownStr = '';
+          if (hours > 0) countdownStr += `${hours}h `;
+          countdownStr += `${minutes}m ${seconds}s`;
+          
+          statusText.innerHTML = `<span class="text-brand font-bold">Starts in: ${countdownStr}</span>`;
+        }
+      });
+    }
+
+    // Initial call and set interval
+    updateMatchStatuses();
+    setInterval(updateMatchStatuses, 1000);
+  </script>
+</Layout>
+
+<style>
+  /* Custom scrollbar hiding helper */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>

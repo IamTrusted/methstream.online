@@ -1,0 +1,219 @@
+---
+import "../../../../../styles/global.css";
+import { fetchSports, fetchMatches, fetchStreams } from "../../../../../utils/api";
+
+let { eventId } = Astro.params;
+
+// Clean eventId from trailing slashes if any
+if (eventId && eventId.endsWith('/')) {
+  eventId = eventId.slice(0, -1);
+}
+
+interface APIMatch {
+    id: string;
+    title: string;
+    category: string;
+    date: number;
+    poster?: string;
+    popular: boolean;
+    teams?: {
+        home?: {
+            name: string;
+            badge: string;
+        },
+        away?: {
+            name: string;
+            badge: string;
+        }
+    };
+    sources: {
+        source: string;
+        id: string;
+    }[];
+}
+
+interface Stream {
+    id: string;
+    streamNo: number;
+    language: string;
+    hd: boolean;
+    embedUrl: string;
+    source: string;
+}
+
+let match: APIMatch | undefined;
+let streams: Stream[] = [];
+let sportName = "";
+
+// Fetch event data
+try {
+  const [allMatches, allSports] = await Promise.all([
+    fetchMatches('all'),
+    fetchSports()
+  ]);
+
+  if (allMatches.length === 0) {
+    throw new Response(`Matches API Unavailable`, { status: 503 });
+  }
+
+  match = allMatches.find(m => m.id === eventId);
+
+  if (!match) {
+    // Check if it's a case-sensitive issue
+    match = allMatches.find(m => m.id.toLowerCase() === eventId?.toLowerCase());
+  }
+
+  if (!match) {
+    throw new Response("Event not found", { status: 404 });
+  }
+
+  const sport = allSports.find(s => s.id === match?.category);
+  sportName = sport ? sport.name : (match.category || "Sports");
+
+  // Fetch streams for all sources
+  if (match.sources && match.sources.length > 0) {
+    try {
+      const streamPromises = match.sources.map(source =>
+        fetchStreams(source.source, source.id).catch(() => [])
+      );
+      const allSourceStreams = await Promise.allSettled(streamPromises);
+      const flattenedStreams = allSourceStreams
+        .filter(r => r.status === 'fulfilled')
+        .flatMap(r => (r as PromiseFulfilledResult<any>).value);
+
+      if (flattenedStreams.length > 0) {
+        streams = flattenedStreams
+          .map(s => ({
+            ...s,
+            embedUrl: typeof s.embedUrl === 'string' ? s.embedUrl.trim() : ''
+          }))
+          .filter(s => s.embedUrl);
+      }
+    } catch (e) {
+      console.error("Stream fetch error:", e);
+    }
+  }
+} catch (err: any) {
+  // Catch network errors or thrown Responses
+  if (err instanceof Response) throw err;
+  console.error("Play Page Error:", err);
+  throw new Response(err.message || "Internal Server Error", { status: 500 });
+}
+
+const SITE_NAME = import.meta.env.SITE_NAME || "Methstreams";
+
+export const prerender = false;
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{match ? `Watch ${match.title} Live Stream | ${SITE_NAME}` : `Watch Today's Matches Live Stream | ${SITE_NAME}`}</title>
+    <meta name="description" content={match ? `Watch ${match.title} live stream on ${SITE_NAME}. Best free soccer streams & totalsportek alternative in HD, no subscription needed.` : `Watch today's matches live on ${SITE_NAME}. #1 free soccer streams and totalsportek alternative online.`} />
+    <meta name="keywords" content={match ? `${SITE_NAME.toLowerCase()}, live stream, watch ${match.title} online, free football streams` : `${SITE_NAME.toLowerCase()}, live football, free soccer streams, watch football online`} />
+    <meta name="robots" content="noindex, follow" />
+    <script is:inline>
+      // Default theme is 'dark' (moon)
+      const theme = (() => {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('theme')) {
+          return localStorage.getItem('theme');
+        }
+        return 'dark';
+      })();
+    
+      if (theme === 'light') {
+        document.documentElement.classList.add('light');
+      } else {
+        document.documentElement.classList.remove('light');
+      }
+    </script>
+  </head>
+  <body class="flex flex-col items-center min-h-screen bg-[#080c14]">
+    <main class="max-w-5xl w-full my-6 px-4">
+      <div class="w-full space-y-3">
+        <!-- Video -->
+        <div
+          class="w-full p-2 sm:p-4 theme-card rounded-2xl [&>iframe]:aspect-video [&>iframe]:w-full [&>iframe]:h-auto min-h-[300px] border border-white/10 shadow-2xl bg-black"
+        >
+          {streams.length > 0 ? (
+            <div id="player-container" class="w-full aspect-video flex flex-col items-center justify-center bg-neutral-900 rounded-xl relative overflow-hidden shadow-2xl group/overlay cursor-pointer">
+              <div id="initial-watch-overlay" class="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/90 p-4">
+                <div class="w-24 h-24 bg-gradient-to-tr from-blue-600 to-sky-400 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(59,130,246,0.6)] group-hover/overlay:scale-110 transition-transform duration-500">
+                  <svg class="w-12 h-12 text-white translate-x-1" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"></path>
+                  </svg>
+                </div>
+                <div class="text-center mt-6">
+                  <h3 class="text-2xl font-black text-white uppercase italic mb-2 tracking-tight">Live Stream Ready</h3>
+                  <p class="text-neutral-400 text-sm mb-8">Click anywhere to start watching the live stream</p>
+                  <button 
+                    id="start-stream-btn"
+                    data-url={streams[0].embedUrl}
+                    class="px-12 py-4 bg-gradient-to-r from-blue-600 to-blue-500 text-white font-black rounded-xl text-xl uppercase tracking-widest hover:from-blue-500 hover:to-blue-400 transition-all shadow-xl shadow-blue-500/40 cursor-pointer"
+                  >
+                    Watch Now
+                  </button>
+                </div>
+              </div>
+
+              <iframe
+                frameborder="0"
+                src=""
+                allowfullscreen
+                scrolling="no"
+                allowtransparency="true"
+                class="rounded-lg shadow-lg w-full h-full hidden"
+                id="player"
+                title="Live Stream Player"
+                loading="lazy"></iframe>
+            </div>
+          ) : (
+            <div class="aspect-video w-full flex items-center justify-center bg-neutral-900 rounded-lg text-white">
+              <p>No streams available for this match yet.</p>
+            </div>
+          )}
+        </div>
+
+        <script is:inline>
+          function decodeUrl(value) {
+            if (!value) return '';
+            const trimmed = value.trim();
+
+            try {
+              const decoded = atob(trimmed);
+              if (decoded.startsWith('http://') || decoded.startsWith('https://')) {
+                return decoded;
+              }
+            } catch (e) {
+              // ignore and fall through to original value
+            }
+
+            return trimmed.startsWith('http://') || trimmed.startsWith('https://')
+              ? trimmed
+              : '';
+          }
+
+          const player = document.getElementById('player');
+          const overlay = document.getElementById('initial-watch-overlay');
+          const playerContainer = document.getElementById('player-container');
+
+          if (playerContainer) {
+            playerContainer.addEventListener('click', () => {
+              const btn = document.getElementById('start-stream-btn');
+              const rawUrl = btn ? btn.getAttribute('data-url') : null;
+              const finalUrl = decodeUrl(rawUrl);
+
+              if (player && finalUrl) {
+                player.src = finalUrl;
+                player.classList.remove('hidden');
+                if (overlay) overlay.classList.add('hidden');
+              }
+            });
+          }
+        </script>
+      </div>
+    </main>
+  </body>
+</html>

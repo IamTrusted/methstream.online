@@ -1,0 +1,28 @@
+---
+import Layout from "../layouts/Layout.astro";
+const SITE_NAME = "Methstreams";
+---
+
+<Layout
+  title={`${SITE_NAME} - Contact Us | Live Football Streaming`}
+  description={`Contact the ${SITE_NAME} team for any inquiries or support regarding our live sports streaming services.`}
+  keywords={`${SITE_NAME}, contact us, live streaming, support, football streams`}
+>
+  <div class="max-w-4xl mx-auto text-left">
+    <div class="mx-3 prose max-w-none theme-text-primary p-8">
+      <div>
+        <h1 class="text-4xl font-black mb-8 bg-gradient-to-r from-blue-400 to-sky-300 bg-clip-text text-transparent">Contact Us</h1>
+        <p class="text-lg mb-6">
+          We are always happy to hear from you. If you have any questions, suggestions, or feedback, please don't hesitate to reach out to us.
+        </p>
+        <p class="text-xl">
+          <strong>Email:</strong> admin@{
+            (Astro.site?.toString() || Astro.url.origin)
+              .replace(/^https?:\/\//, "")
+              .replace(/\/$/, "")
+          }
+        </p>
+      </div>
+    </div>
+  </div>
+</Layout>

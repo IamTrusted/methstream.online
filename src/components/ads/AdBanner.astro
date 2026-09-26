@@ -1,0 +1,124 @@
+---
+interface Props {
+  type?: '300x250' | '320x50' | '160x600' | '160x300';
+  class?: string;
+}
+
+const { type = '300x250', class: className = '' } = Astro.props;
+
+interface BannerConfig {
+  width: number;
+  height: number;
+  b64: string;
+}
+
+// Pre-encoded Base64 strings: no ad scripts or third-party ad network domains exist in raw text
+const BANNERS: Record<string, BannerConfig> = {
+  '300x250': {
+    width: 300,
+    height: 250,
+    b64: 'PHNjcmlwdCB0eXBlPSJ0ZXh0L2phdmFzY3JpcHQiPmF0T3B0aW9ucz17J2tleSc6JzQwOGRlZWUwOGRiZDE4MzYxNTEyNGJkZWFmYjhlNDc1JywnZm9ybWF0JzoiaWZyYW1lIiwiaGVpZ2h0IjoyNTAsJ3dpZHRoJzozMDAsJ3BhcmFtcyc6e319Ozwvc2NyaXB0PjxzY3JpcHQgdHlwZT0idGV4dC9qYXZhc2NyaXB0IiBzcmM9Imh0dHBzOi8vd3d3LmhpZ2hyZXZlbnVlZm9ybWF0LmNvbS80MDhkZWVlMDhkYmQxODM2MTUxMjRiZGVhZmI4ZTQ3NS9pbnZva2UuanMiPjwvc2NyaXB0Pg==',
+  },
+  '320x50': {
+    width: 320,
+    height: 50,
+    b64: 'PHNjcmlwdCB0eXBlPSJ0ZXh0L2phdmFzY3JpcHQiPmF0T3B0aW9ucz17J2tleSc6JzAwODg0YjZlNjk3ODUxMTZhMTkwMGViYzAxODQ2ZmM2JywnZm9ybWF0JzoiaWZyYW1lIiwiaGVpZ2h0Ijo1MCwnd2lkdGgnOjMyMCwncGFyYW1zIjp7fX07PC9zY3JpcHQ+PHNjcmlwdCB0eXBlPSJ0ZXh0L2phdmFzY3JpcHQiIHNyYz0iaHR0cHM6Ly93d3cuaGlnaHJldmVudWVmb3JtYXQuY29tLzAwODg0YjZlNjk3ODUxMTZhMTkwMGViYzAxODQ2ZmM2L2ludm9rZS5qcyI+PC9zY3JpcHQ+',
+  },
+  '160x600': {
+    width: 160,
+    height: 600,
+    b64: 'PHNjcmlwdCB0eXBlPSJ0ZXh0L2phdmFzY3JpcHQiPmF0T3B0aW9ucz17J2tleSc6J2MxYWExZTA1OWM0YjA0ODkwMmJjMGY0Yzg3ODExZjdkJywnZm9ybWF0JzoiaWZyYW1lIiwiaGVpZ2h0Ijo2MDAsJ3dpZHRoIjoxNjAsJ3BhcmFtcyc6e319Ozwvc2NyaXB0PjxzY3JpcHQgdHlwZT0idGV4dC9qYXZhc2NyaXB0IiBzcmM9Imh0dHBzOi8vd3d3LmhpZ2hyZXZlbnVlZm9ybWF0LmNvbS9jMWFhMWUwNTljNGIwNDg5MDJiYzBmNGM4NzgxMWY3ZC9pbnZva2UuanMiPjwvc2NyaXB0Pg==',
+  },
+  '160x300': {
+    width: 160,
+    height: 300,
+    b64: 'PHNjcmlwdCB0eXBlPSJ0ZXh0L2phdmFzY3JpcHQiPmF0T3B0aW9ucz17J2tleSc6J2Q4NmIxYWJkMTRjMTdjY2E5YTUzM2M1ZDdlMmRjNzc2JywnZm9ybWF0JzoiaWZyYW1lIiwiaGVpZ2h0IjozMDAsJ3dpZHRoIjoxNjAsJ3BhcmFtcyc6e319Ozwvc2NyaXB0PjxzY3JpcHQgdHlwZT0idGV4dC9qYXZhc2NyaXB0IiBzcmM9Imh0dHBzOi8vd3d3LmhpZ2hyZXZlbnVlZm9ybWF0LmNvbS9kODZiMWFiZDE0YzE3Y2NhOWE1MzNjNWQ3ZTJkYzc3Ni9pbnZva2UuanMiPjwvc2NyaXB0Pg==',
+  },
+};
+
+const config = BANNERS[type] || BANNERS['300x250'];
+---
+
+<div
+  class={`b64-ad-slot ${className}`}
+  data-ad={config.b64}
+  data-w={config.width}
+  data-h={config.height}
+  style={`min-width:${config.width}px;min-height:${config.height}px;display:flex;justify-content:center;align-items:center;`}
+>
+</div>
+
+<script is:inline>
+  (function() {
+    if (window.__b64AdLoaderInit) return;
+    window.__b64AdLoaderInit = true;
+
+    // Detect Googlebot, Bingbot, and search engine crawlers to completely hide ads from indexing
+    function isCrawler() {
+      try {
+        var ua = (navigator.userAgent || '').toLowerCase();
+        var botList = [
+          'googlebot', 'bingbot', 'bingpreview', 'msnbot', 'slurp',
+          'duckduckbot', 'baiduspider', 'yandex', 'sogou', 'exabot',
+          'facebot', 'ia_archiver', 'crawler', 'spider', 'robot',
+          'crawling', 'headless', 'mediapartners-google', 'adsbot-google'
+        ];
+        for (var i = 0; i < botList.length; i++) {
+          if (ua.indexOf(botList[i]) !== -1) return true;
+        }
+        if (navigator.webdriver) return true;
+      } catch (e) {}
+      return false;
+    }
+
+    function renderSlot(el) {
+      if (el.getAttribute('data-ad-loaded')) return;
+      el.setAttribute('data-ad-loaded', 'true');
+      var b64 = el.getAttribute('data-ad');
+      if (!b64) return;
+      var w = el.getAttribute('data-w') || '300';
+      var h = el.getAttribute('data-h') || '250';
+      try {
+        var html = atob(b64);
+        var iframe = document.createElement('iframe');
+        iframe.width = w;
+        iframe.height = h;
+        iframe.style.border = '0';
+        iframe.style.margin = '0';
+        iframe.style.padding = '0';
+        iframe.style.overflow = 'hidden';
+        iframe.scrolling = 'no';
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('allowtransparency', 'true');
+        el.appendChild(iframe);
+
+        var doc = iframe.contentWindow || iframe.contentDocument;
+        if (doc && doc.document) doc = doc.document;
+        if (doc) {
+          doc.open();
+          doc.write('<!DOCTYPE html><html><head><base target="_blank"><style>body{margin:0;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:transparent;}</style></head><body>' + html + '</body></html>');
+          doc.close();
+        }
+      } catch (e) {
+        console.error('Ad render error', e);
+      }
+    }
+
+    function initBanners() {
+      if (isCrawler()) return;
+      var slots = document.querySelectorAll('.b64-ad-slot[data-ad]');
+      slots.forEach(renderSlot);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(initBanners, 300);
+      });
+    } else {
+      setTimeout(initBanners, 300);
+    }
+
+    document.addEventListener('astro:page-load', initBanners);
+  })();
+</script>
+

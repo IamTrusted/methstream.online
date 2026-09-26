@@ -1,0 +1,189 @@
+---
+import "../../styles/global.css";
+const SITE_NAME = import.meta.env.PUBLIC_SITE_NAME || "Soccer100";
+---
+
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blogger V7 - Login</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <script is:inline>
+      const theme = (() => {
+        try {
+          if (localStorage.getItem('theme')) return localStorage.getItem('theme');
+        } catch(e) {}
+        return 'light';
+      })();
+      if (theme === 'light') document.documentElement.classList.add('light');
+    </script>
+    <style is:global>
+      body {
+        background: #e5e7eb;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .login-card {
+        background: white;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 520px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        overflow: hidden;
+        margin: 20px;
+      }
+      .login-header {
+        padding: 16px 24px;
+        background: #f8fafc;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .login-header h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+      }
+      .login-body {
+        padding: 32px 40px 40px;
+      }
+      .login-title {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 8px;
+      }
+      .login-subtitle {
+        color: #6b7280;
+        font-size: 16px;
+        margin: 0 0 32px;
+      }
+      .form-group {
+        margin-bottom: 16px;
+      }
+      .form-group input {
+        width: 100%;
+        padding: 10px 14px;
+        font-size: 14px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        outline: none;
+        box-sizing: border-box;
+        background: #eff6ff;
+      }
+      .form-group input:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(96,165,250,0.2);
+      }
+      .btn-login {
+        width: 100%;
+        padding: 10px 16px;
+        background: #c7d2fe;
+        color: #1e1b4b;
+        border: none;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 8px;
+        transition: background 0.15s;
+      }
+      .btn-login:hover { background: #a5b4fc; }
+      .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+      .error-msg {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-card">
+      <div class="login-header">
+        <h2>Log In</h2>
+      </div>
+      <div class="login-body">
+        <h1 class="login-title">Blogger V7</h1>
+        <p class="login-subtitle">Welcome Back, Please Login.</p>
+
+        <div class="error-msg" id="errorMsg">Invalid username or password</div>
+
+        <form id="loginForm" autocomplete="off">
+          <div class="form-group">
+            <input type="text" id="username" placeholder="Username" autocomplete="off" required />
+          </div>
+          <div class="form-group">
+            <input type="password" id="password" placeholder="Password" required />
+          </div>
+          <button type="submit" class="btn-login" id="loginBtn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Log In
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script is:inline>
+      (async function() {
+        try {
+          const res = await fetch('/api/admin/login.json', { credentials: 'same-origin' });
+          const data = await res.json();
+          if (data.loggedIn) {
+            window.location.href = '/admin/dashboard';
+          }
+        } catch(e) {}
+      })();
+
+      const form = document.getElementById('loginForm');
+      const errorMsg = document.getElementById('errorMsg');
+      const btn = document.getElementById('loginBtn');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorMsg.style.display = 'none';
+        btn.disabled = true;
+        btn.textContent = 'Logging in...';
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        try {
+          const res = await fetch('/api/admin/login.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ username, password })
+          });
+          const data = await res.json();
+          if (res.ok && data.ok) {
+            window.location.href = '/admin/dashboard';
+          } else {
+            errorMsg.style.display = 'block';
+            errorMsg.textContent = data.error || 'Login failed';
+          }
+        } catch (err) {
+          errorMsg.style.display = 'block';
+          errorMsg.textContent = 'Network error, try again';
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Log In';
+        }
+      });
+    </script>
+  </body>
+</html>

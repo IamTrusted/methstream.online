@@ -1,0 +1,837 @@
+---
+import Layout from "../layouts/Layout.astro";
+import slugify from "../utils/slugify";
+import { fetchSports, fetchMatches, ENDPOINTS } from "../utils/api";
+
+export const prerender = false;
+
+interface APIMatch {
+    id: string;
+    title: string;
+    category: string;
+    date: number;
+    poster?: string;
+    popular: boolean;
+    teams?: {
+        home?: {
+            name: string;
+            badge: string;
+        },
+        away?: {
+            name: string;
+            badge: string;
+        }
+    };
+    sources: {
+        source: string;
+        id: string;
+    }[];
+}
+
+interface Sport {
+    id: string;
+    name: string;
+}
+
+let allSports: { sport: string; sport_id: string; league_schedule: APIMatch[] }[] = [];
+try {
+  const [sportsData, matchesData] = await Promise.all([
+    fetchSports(),
+    fetchMatches('all')
+  ]);
+
+  if (sportsData.length > 0) {
+    // Filter matches for Today and Tomorrow only
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayAfterTomorrow = new Date(today);
+    dayAfterTomorrow.setDate(today.getDate() + 2); // This covers today and tomorrow
+
+    const filteredMatches = matchesData.filter(m => {
+      const matchDate = new Date(m.date);
+      return matchDate >= today && matchDate < dayAfterTomorrow;
+    });
+
+    // Group matches by category
+    const groupedMatches = sportsData.map(sport => {
+      const hasAnyMatchesInAPI = matchesData.some(m => m.category === sport.id);
+      const sportMatches = filteredMatches.filter(m => m.category === sport.id);
+      return {
+        sport: sport.name,
+        sport_id: sport.id,
+        league_schedule: sportMatches,
+        isVisibleInGrid: hasAnyMatchesInAPI
+      };
+    }).filter(s => s.isVisibleInGrid);
+
+    // Move Football to the top
+    const footballIdx = groupedMatches.findIndex(s => s.sport_id === 'football');
+    if (footballIdx > -1) {
+      const football = groupedMatches.splice(footballIdx, 1)[0];
+      allSports = [football, ...groupedMatches];
+    } else {
+      allSports = groupedMatches;
+    }
+  }
+} catch (error) {
+  console.error("Error fetching schedule for landing page:", error);
+}
+
+const sportIcons: { [key: string]: string } = {
+  football: "⚽",
+  basketball: "🏀",
+  baseball: "⚾",
+  hockey: "🏒",
+  mma: "🥋",
+  boxing: "🥊",
+  tennis: "🎾",
+  cricket: "🏏",
+  rugby: "🏉",
+  volleyball: "🏐",
+  motorsports: "🏎️",
+  fight: "🥊",
+  american: "🏈",
+  "american-football": "🏈",
+  golf: "⛳",
+  snooker: "🎱",
+  darts: "🎯"
+};
+
+const formatDateEnglish = (date: Date) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  const dayName = days[date.getDay()];
+  const day = date.getDate().toString().padStart(2, '0');
+  const monthName = months[date.getMonth()];
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  
+  return `${dayName}, ${monthName} ${day} - ${hours}:${minutes}`;
+};
+
+const title = "Methstreams Official - Best Buffstreams & Crackstreams";
+const description = "Watch Methstreams official live streams in HD. The best Buffstreams & Crackstreams alternative for free NFL, NBA, UFC, Premier League & MLB broadcasts.";
+const keywords = "methstreams, methstreams alternative, buffstreams, crackstreams, best buffstreams alternative, best crackstreams alternative, free live sports streaming, watch sports hd";
+---
+
+<Layout title={title} description={description} keywords={keywords}>
+  <slot name="head">
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": title,
+      "description": description,
+      "image": "/favicon.svg",
+      "author": {
+        "@type": "Organization",
+        "name": "Methstreams"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Methstreams",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://methstream.online/favicon.svg"
+        }
+      },
+      "datePublished": "2026-06-04T14:00:00+05:00",
+      "dateModified": "2026-06-04T14:00:00+05:00"
+    })} />
+    
+    <script type="application/ld+json" is:inline set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is Methstreams free to use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes! Our platform is 100% free with no subscription fees or hidden costs. We provide a premium viewing experience for free, just like the original Methstreams used to do."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What sports can I watch here?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "We cover NFL, NBA, UFC, Soccer, MLB, NHL, and more. Our variety makes us the top Methstreams alternative for every sports fan."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the best alternative for NBA?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Methstreams covers every NBA game from opening night through the Finals. Multiple servers ensure you always find a working stream."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Methstreams free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, completely and permanently free. No subscription, no account, no payment ever required."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Methstreams cover the NFL?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. All NFL regular season games, playoffs, and the Super Bowl are covered on Methstreams."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I know the Methstreams link is real?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The only official address for our platform is methstream.online. Bookmark this URL to ensure you are always on the genuine site."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use Methstreams without a VPN?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "In most countries, yes. Methstreams works without a VPN in Pakistan, India, USA, Canada, and most of Asia. A free VPN may be needed in the UK or Australia."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Methstreams cover World Cup 2026?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Methstreams will stream every FIFA World Cup 2026 match live, from the group stages to the final. Full coverage of all 48 teams."
+          }
+        }
+      ]
+    })} />
+  </slot>
+
+  <div class="max-w-7xl mx-auto px-4 py-12">
+    <!-- Hero Section -->
+    <div class="relative overflow-hidden theme-card rounded-[2rem] p-8 sm:p-16 mb-16 border border-brand/20 bg-gradient-to-br from-brand/5 via-transparent to-brand/5">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-brand/5 rounded-full blur-2xl pointer-events-none"></div>
+      <p class="text-lg sm:text-xl leading-relaxed mb-0 font-semibold theme-text-secondary italic">
+        "Methstreams has long been a favorite for sports fans looking for a reliable stream, but its recent domain issues have made it harder to find. If you're searching for a stable and high-quality destination for live sports in 2026, you've found the perfect place."
+      </p>
+    </div>
+
+    <!-- Live Matches Schedule widget -->
+    <div id="live-schedule" class="mb-16 scroll-mt-20">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 border-b border-[var(--border-color)] pb-4">
+        <div>
+          <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider theme-text-primary italic">
+            🥊 Live Sports <span class="text-brand">Center</span>
+          </h2>
+          <p class="theme-text-secondary text-sm mt-1">Select a sport and start watching live streams instantly.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">Live 24/7 Schedule</span>
+        </div>
+      </div>
+
+      <!-- Sports Filters -->
+      {allSports.length > 0 ? (
+        <div class="flex gap-2 overflow-x-auto pb-4 mb-6 no-scrollbar">
+          {allSports.map((sport, index) => {
+            const icon = sportIcons[sport.sport_id] || "🏆";
+            const isActive = index === 0;
+            return (
+              <button 
+                data-sport-tab={sport.sport_id}
+                class={`flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all duration-300 shadow-md whitespace-nowrap text-xs font-black uppercase tracking-wider ${
+                  isActive 
+                    ? "bg-brand border-brand text-black active-tab" 
+                    : "theme-card border-[var(--border-color)] hover:border-brand"
+                }`}
+              >
+                <span>{icon}</span>
+                <span>{sport.sport}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <!-- Matches list container -->
+      <div class="theme-card rounded-2xl p-4 sm:p-6 shadow-xl border backdrop-blur-sm">
+        {allSports.length > 0 ? (
+          allSports.map((sport, index) => {
+            const isHidden = index !== 0;
+            return (
+              <div 
+                id={`schedule-tab-${sport.sport_id}`}
+                class={`sport-match-list space-y-4 ${isHidden ? 'hidden' : ''}`}
+              >
+                {sport.league_schedule.map((event: APIMatch) => {
+                  const home = event.teams?.home?.name || event.title.split(' vs ')[0];
+                  const away = event.teams?.away?.name || event.title.split(' vs ')[1];
+
+                  const eventDate = new Date(event.date);
+                  const eventTimeStr = eventDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                  const eventDateFormatted = formatDateEnglish(eventDate);
+
+                  return (
+                    <a
+                      href={`/live/${slugify(sport.sport_id)}/${slugify(`${event.title}`)}/${event.id}/`}
+                      class="group grid grid-cols-12 items-center theme-card theme-card-hover transition-all duration-300 rounded-xl px-4 py-5 border shadow-md gap-3"
+                    >
+                      {/* HOME TEAM */}
+                      <div class="col-span-4 flex items-center gap-3 min-w-0">
+                        <div class="relative shrink-0">
+                          {event.teams?.home?.badge ? (
+                            <img
+                              src={ENDPOINTS.BADGE(event.teams.home.badge)}
+                              alt={home}
+                              class="w-8 h-8 sm:w-12 sm:h-12 object-contain drop-shadow-md"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div class="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center bg-neutral-500/10 rounded-full text-base sm:text-xl">
+                              {sportIcons[sport.sport_id] || "🏆"}
+                            </div>
+                          )}
+                        </div>
+                        <span class="theme-text-primary font-black text-sm sm:text-lg tracking-tight leading-tight break-words overflow-hidden">
+                          {home}
+                        </span>
+                      </div>
+
+                      {/* TIME & CTA */}
+                      <div class="col-span-4 flex flex-col items-center justify-center gap-1">
+                        <div 
+                          class="match-status-container flex flex-col items-center" 
+                          data-timestamp={event.date}
+                        >
+                          <span class="text-[10px] sm:text-xs font-black theme-text-secondary uppercase tracking-widest bg-white/5 px-2 py-0.5 rounded-full border border-white/5 status-text">
+                            {eventTimeStr}
+                          </span>
+                        </div>
+                        <span class="theme-text-secondary text-[8px] sm:text-[10px] font-bold uppercase tracking-tight text-center">
+                          {eventDateFormatted}
+                        </span>
+                      </div>
+
+                      {/* AWAY TEAM */}
+                      <div class="col-span-4 flex items-center justify-end gap-3 min-w-0">
+                        <span class="theme-text-primary font-black text-sm sm:text-lg tracking-tight leading-tight text-right break-words overflow-hidden">
+                          {away}
+                        </span>
+                        <div class="relative shrink-0">
+                          {event.teams?.away?.badge ? (
+                            <img
+                              src={ENDPOINTS.BADGE(event.teams.away.badge)}
+                              alt={away}
+                              class="w-8 h-8 sm:w-12 sm:h-12 object-contain drop-shadow-md"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div class="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center bg-neutral-500/10 rounded-full text-base sm:text-xl">
+                              {sportIcons[sport.sport_id] || "🏆"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            );
+          })
+        ) : (
+          <div class="text-center py-20">
+            <div class="text-5xl mb-4">🔍</div>
+            <h3 class="text-xl font-bold theme-text-primary italic uppercase mb-2">No live events found</h3>
+            <p class="theme-text-secondary">Please check back later for today's match schedule.</p>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- What Is Methstreams & Why It is Failing -->
+    <div class="theme-card rounded-2xl p-6 sm:p-10 shadow-xl border backdrop-blur-sm prose prose-invert max-w-none theme-text-secondary leading-relaxed mb-16">
+      <div class="max-w-4xl">
+        <h2 class="text-2xl sm:text-3xl font-black uppercase text-brand italic mb-6">What Is Methstreams?</h2>
+        <p class="mb-6">
+          Despite the unusual name, Methstreams was simply a free sports streaming aggregator that linked to live sports broadcasts. It gained popularity in Reddit communities like r/nba, r/nfl, and r/MMAstreams for covering American sports.
+        </p>
+        <h3 class="text-xl font-black theme-text-primary mb-4">Why Methstreams Is Failing Its Users</h3>
+        <p class="mb-6">
+          In 2026, the original Methstreams platform has faced numerous challenges that make it a poor choice for dedicated sports fans:
+        </p>
+        <ul class="grid grid-cols-1 md:grid-cols-2 gap-4 list-none p-0 mb-8">
+          <li class="flex gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+            <span class="text-brand text-xl">❌</span>
+            <span class="theme-text-secondary"><strong class="theme-text-primary">Constant domain changes:</strong> Users have to hunt for a new working link every week.</span>
+          </li>
+          <li class="flex gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+            <span class="text-brand text-xl">❌</span>
+            <span class="theme-text-secondary"><strong class="theme-text-primary">Intrusive pop-up ads:</strong> The original site has become cluttered with aggressive advertising.</span>
+          </li>
+          <li class="flex gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+            <span class="text-brand text-xl">❌</span>
+            <span class="theme-text-secondary"><strong class="theme-text-primary">Frequent buffering:</strong> Overloaded servers mean streams often freeze during critical moments.</span>
+          </li>
+          <li class="flex gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
+            <span class="text-brand text-xl">❌</span>
+            <span class="theme-text-secondary"><strong class="theme-text-primary">Poor football coverage:</strong> Methstreams was never strong on international soccer.</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Why Our Platform is the Best Destination Grid -->
+    <div class="mb-16">
+      <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider text-center theme-text-primary mb-12 italic">
+        Why Methstreams Is the <span class="text-brand">Ultimate Destination</span>
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Feature 1 -->
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5 hover:border-brand/30 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-2xl mb-4">🏠</div>
+          <h3 class="text-lg font-black theme-text-primary mb-2 uppercase">Reliable Access</h3>
+          <p class="theme-text-secondary text-xs leading-relaxed">
+            We provide a stable and consistent platform for all your streaming needs. No more hunting for new domains every week.
+          </p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5 hover:border-brand/30 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-2xl mb-4">📊</div>
+          <h3 class="text-lg font-black theme-text-primary mb-2 uppercase">Wide Coverage</h3>
+          <p class="theme-text-secondary text-xs leading-relaxed">
+            We cover Football (soccer), NBA, NFL, NHL, MLB, UFC, Cricket, and F1 in high definition.
+          </p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5 hover:border-brand/30 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-2xl mb-4">💳</div>
+          <h3 class="text-lg font-black theme-text-primary mb-2 uppercase">100% Free</h3>
+          <p class="theme-text-secondary text-xs leading-relaxed">
+            No accounts. No subscriptions. No email addresses. No payment details. Everything here is completely free, forever.
+          </p>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5 hover:border-brand/30 transition-all duration-300">
+          <div class="w-12 h-12 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-2xl mb-4">📱</div>
+          <h3 class="text-lg font-black theme-text-primary mb-2 uppercase">Mobile Ready</h3>
+          <p class="theme-text-secondary text-xs leading-relaxed">
+            Our site loads perfectly on any smartphone or tablet, providing smooth HD streams with no lag even on mobile networks.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison Table Section -->
+    <div id="comparison" class="mb-16 scroll-mt-20">
+      <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider text-center theme-text-primary mb-8 italic">
+        Methstreams vs Others: <span class="text-brand">Head-to-Head</span>
+      </h2>
+      <div class="overflow-x-auto rounded-2xl border border-white/10 shadow-2xl">
+        <table class="min-w-full divide-y divide-white/10 theme-card text-sm sm:text-base">
+          <thead>
+            <tr class="bg-white/5">
+              <th class="px-6 py-4 text-left font-black text-brand uppercase tracking-wider">Feature</th>
+              <th class="px-6 py-4 text-left font-black theme-text-secondary">Other Streams</th>
+              <th class="px-6 py-4 text-left font-black text-brand bg-brand/5 border-x border-white/10">Methstreams</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/10">
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">Stable Domain URL</td>
+              <td class="px-6 py-4 text-red-500">❌ Changes often</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">Free to Use</td>
+              <td class="px-6 py-4 theme-text-secondary">✅ Yes</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">No Registration</td>
+              <td class="px-6 py-4 theme-text-secondary">✅ Yes</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">Multiple Backup Servers</td>
+              <td class="px-6 py-4 text-red-500">❌ No</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes (3-5 servers)</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">NFL & NBA Coverage</td>
+              <td class="px-6 py-4 theme-text-secondary">✅ Yes</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">UFC & MMA Coverage</td>
+              <td class="px-6 py-4 theme-text-secondary">✅ Yes</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">Football/Soccer Coverage</td>
+              <td class="px-6 py-4 text-red-500">❌ Weak</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Excellent</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">Mobile Friendly layout</td>
+              <td class="px-6 py-4 text-amber-500">Partially</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Fully optimized</td>
+            </tr>
+            <tr class="hover:bg-white/5 transition-colors">
+              <td class="px-6 py-4 font-bold">Safe from Fake Clones</td>
+              <td class="px-6 py-4 text-red-500">❌ Risky</td>
+              <td class="px-6 py-4 text-emerald-500 font-bold bg-brand/5 border-x border-white/10">✅ Yes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Match Categories Grid -->
+    <div class="mb-16">
+      <h2 class="text-2xl sm:text-3xl font-black uppercase tracking-wider text-center theme-text-primary mb-12 italic">
+        Key Events <span class="text-brand">Methstreams Covers Best</span>
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+          <h3 class="text-xl font-black text-brand mb-3 uppercase italic">🌍 FIFA World Cup 2026</h3>
+          <p class="theme-text-secondary text-sm leading-relaxed">
+            The World Cup will dominate global sports for an entire month in 2026. Methstreams will stream every single match live — group stages, knockouts, and the Grand Final.
+          </p>
+        </div>
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+          <h3 class="text-xl font-black text-brand mb-3 uppercase italic">🇪🇺 UEFA Champions League</h3>
+          <p class="theme-text-secondary text-sm leading-relaxed">
+            The Champions League is the most prestigious club tournament. Methstreams provides high-speed stream feeds for every matchday, so you never miss elite European matchups.
+          </p>
+        </div>
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+          <h3 class="text-xl font-black text-brand mb-3 uppercase italic">🏏 Cricket — Major Tournaments</h3>
+          <p class="theme-text-secondary text-sm leading-relaxed">
+            Cricket fans finally have a reliable home. Every major tournament and series is streamed live in HD.
+          </p>
+        </div>
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+          <h3 class="text-xl font-black text-brand mb-3 uppercase italic">🥊 UFC PPV Events</h3>
+          <p class="theme-text-secondary text-sm leading-relaxed">
+            UFC PPV events cost $70+ on cable. Methstreams streams every PPV main card and prelims for free. Watch Conor McGregor, Jon Jones, and the biggest champions without paying.
+          </p>
+        </div>
+        <div class="theme-card p-6 rounded-2xl border border-white/5 bg-white/5">
+          <h3 class="text-xl font-black text-brand mb-3 uppercase italic">🏎️ Formula 1 Grand Prix</h3>
+          <p class="theme-text-secondary text-sm leading-relaxed">
+            Methstreams covers every Formula 1 race weekend including practice sessions, qualifying, and the main Grand Prix. Catch F1, NASCAR, and MotoGP races live.
+          </p>
+        </div>
+        <div class="theme-card p-6 rounded-2xl border border-brand/10 bg-brand/5 flex flex-col justify-center items-center text-center p-8">
+          <h3 class="text-2xl font-black text-brand mb-2 uppercase italic">Start Streaming</h3>
+          <p class="theme-text-secondary text-sm mb-4">View today's matches and kickoff times in our live directory.</p>
+          <a href="#live-schedule" class="px-6 py-2.5 bg-brand text-black font-black rounded-lg text-xs uppercase tracking-wider transition-all hover:bg-brand/90">
+            Go to Match Schedule
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safety & Security Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center mb-16">
+      <div class="lg:col-span-6">
+        <h2 class="text-2xl sm:text-3xl font-black uppercase theme-text-primary mb-6 italic">Staying Safe with <span class="text-brand">Methstreams</span></h2>
+        <p class="theme-text-secondary leading-relaxed mb-6">
+          A major problem in the streaming ecosystem is fake clone sites that install adware, harvest IP addresses, and trigger scam popup warnings. Methstreams takes a clean, secure approach:
+        </p>
+        <ul class="space-y-4">
+          <li class="flex items-center gap-3">
+            <span class="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold">✓</span>
+            <span class="theme-text-secondary font-medium"><strong class="theme-text-primary">No software downloads</strong> — you never need to install anything.</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold">✓</span>
+            <span class="theme-text-secondary font-medium"><strong class="theme-text-primary">No data collection</strong> — zero accounts mean your data is not stored.</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold">✓</span>
+            <span class="theme-text-secondary font-medium"><strong class="theme-text-primary">Stable known domain</strong> — no confusion about whether the site is fake.</span>
+          </li>
+        </ul>
+      </div>
+      <div class="lg:col-span-6 theme-card p-6 rounded-2xl border border-brand/20 bg-brand/5">
+        <h4 class="font-bold text-white mb-2">💡 How to stay safe</h4>
+        <p class="theme-text-secondary text-sm leading-relaxed mb-4">
+          1. Bookmark our homepage directly for a safer environment.
+          <br>2. Install a lightweight adblocker like **uBlock Origin** to block annoying redirects.
+          <br>3. Never download anything that a streaming site asks you to install.
+        </p>
+      </div>
+    </div>
+
+    <!-- Reddit communities -->
+    <div class="theme-card p-8 rounded-2xl border border-white/10 bg-white/5 mb-16">
+      <h2 class="text-2xl font-black uppercase text-brand mb-4 italic">Methstreams and the Reddit Community</h2>
+      <p class="theme-text-secondary text-sm leading-relaxed mb-6">
+        Reddit's sports streaming communities have largely moved to Methstreams. In subreddits dedicated to finding live links, Methstreams consistently appears as a recommended choice:
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="p-4 rounded-xl bg-white/5 border border-white/5 italic text-sm text-center">
+          "It actually works when other sites are completely down."
+        </div>
+        <div class="p-4 rounded-xl bg-white/5 border border-white/5 italic text-sm text-center">
+          "Multiple backup servers mean someone always finds a working stream."
+        </div>
+        <div class="p-4 rounded-xl bg-white/5 border border-white/5 italic text-sm text-center">
+          "Excellent football coverage."
+        </div>
+        <div class="p-4 rounded-xl bg-white/5 border border-white/5 italic text-sm text-center">
+          "No sketchy redirects or fake virus warning banners."
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="mb-16">
+      <h2 class="text-2xl sm:text-3xl font-black uppercase text-center mb-8 theme-text-primary italic">
+        Frequently Asked <span class="text-brand">Questions</span>
+      </h2>
+      <div class="max-w-4xl mx-auto space-y-4">
+        <!-- FAQ 1 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Is Methstreams free to use?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Yes, completely and permanently free. No subscription, no account, no payment ever required.
+            </div>
+          </div>
+        </div>
+        
+        <!-- FAQ 2 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>What is the best alternative for UFC?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Methstreams is the top choice for UFC. Every UFC Fight Night and PPV event is covered with multiple stream server options.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>What is the best alternative for NBA?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Methstreams covers every NBA game from opening night through the Finals. Multiple servers ensure you always find a working stream.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Does Methstreams work on mobile?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Yes, Methstreams is fully optimized for mobile. It works on iPhone, Android, and all tablet devices through any mobile browser.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 5 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Does Methstreams cover the NFL?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Yes. All NFL regular season games, playoffs, and the Super Bowl are covered on Methstreams.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 6 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>How do I know the Methstreams link is real?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              The official and only address is methstream.online. Bookmark it to always have the real site at your fingertips.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 7 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Can I use Methstreams without a VPN?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              In most countries, yes. Methstreams works without a VPN in Pakistan, India, USA, Canada, and most of Asia. A free VPN may be needed in the UK or Australia.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 8 -->
+        <div class="faq-item theme-card border border-white/10 rounded-xl overflow-hidden transition-all duration-300">
+          <button class="faq-question w-full flex justify-between items-center p-5 text-left font-bold text-base sm:text-lg theme-text-primary focus:outline-none">
+            <span>Does Methstreams cover World Cup 2026?</span>
+            <svg class="faq-icon w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <div class="faq-answer max-h-0 overflow-hidden transition-all duration-300 ease-in-out">
+            <div class="p-5 pt-0 theme-text-secondary leading-relaxed border-t border-white/5 text-sm sm:text-base">
+              Yes. Methstreams will stream every FIFA World Cup 2026 match live, from the group stages to the final. Full coverage of all 48 teams.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Final CTA Section -->
+    <div class="theme-card rounded-[2rem] p-10 sm:p-20 text-center relative overflow-hidden border border-brand/10 shadow-2xl mb-16">
+      <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-brand/5 to-transparent"></div>
+      <div class="relative z-10 max-w-3xl mx-auto">
+        <h2 class="text-3xl sm:text-5xl font-black uppercase italic tracking-tighter theme-text-primary mb-6">
+          Start Streaming <span class="text-brand">Now</span>
+        </h2>
+        <p class="text-lg sm:text-xl theme-text-secondary leading-relaxed mb-10 italic">
+          Looking for working Methstreams? Our platform is the mature, reliable, and comprehensive destination for every sport you care about.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a href="/" class="bg-brand text-black px-10 py-4 rounded-xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-brand/20">
+            View Live Schedule
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Articles -->
+    
+    <!-- Disclaimer -->
+    <p class="text-[10px] sm:text-xs opacity-50 italic mt-12 pt-6 border-t border-white/10 text-center">
+      Disclaimer: Methstreams does not host any video content. All streams are sourced from third-party providers. Users are responsible for ensuring compliance with local laws regarding online streaming.
+    </p>
+  </div>
+
+  <!-- Client-side script for tab filter & FAQ Accordion -->
+  <script is:inline>
+    // Tab switching for Live Schedule
+    const tabs = document.querySelectorAll('[data-sport-tab]');
+    const lists = document.querySelectorAll('.sport-match-list');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Deactivate all tabs
+        tabs.forEach(t => {
+          t.classList.remove('bg-brand', 'border-brand', 'text-black', 'active-tab');
+          t.classList.add('theme-card', 'border-[var(--border-color)]');
+        });
+
+        // Activate clicked tab
+        tab.classList.add('bg-brand', 'border-brand', 'text-black', 'active-tab');
+        tab.classList.remove('theme-card', 'border-[var(--border-color)]');
+
+        // Hide all lists
+        lists.forEach(list => list.classList.add('hidden'));
+
+        // Show active list
+        const sportId = tab.getAttribute('data-sport-tab');
+        const activeList = document.getElementById(`schedule-tab-${sportId}`);
+        if (activeList) {
+          activeList.classList.remove('hidden');
+        }
+      });
+    });
+
+    // FAQ Accordion
+    const questions = document.querySelectorAll('.faq-question');
+    questions.forEach(q => {
+      q.addEventListener('click', () => {
+        const item = q.parentElement;
+        const answer = item.querySelector('.faq-answer');
+        const icon = q.querySelector('.faq-icon');
+        const isOpen = item.classList.contains('active');
+
+        // Close all other accordion items
+        document.querySelectorAll('.faq-item').forEach(otherItem => {
+          otherItem.classList.remove('active');
+          const otherAnswer = otherItem.querySelector('.faq-answer');
+          const otherIcon = otherItem.querySelector('.faq-icon');
+          if (otherAnswer) otherAnswer.style.maxHeight = '0px';
+          if (otherIcon) otherIcon.style.transform = 'rotate(0deg)';
+        });
+
+        // Toggle clicked item
+        if (!isOpen) {
+          item.classList.add('active');
+          answer.style.maxHeight = answer.scrollHeight + 'px';
+          icon.style.transform = 'rotate(180deg)';
+        }
+      });
+    });
+
+    // Match Status & Countdown Timer
+    function updateMatchStatuses() {
+      const containers = document.querySelectorAll('.match-status-container');
+      const now = new Date().getTime();
+
+      containers.forEach(container => {
+        const timestamp = parseInt(container.getAttribute('data-timestamp'));
+        const statusText = container.querySelector('.status-text');
+        const diff = timestamp - now;
+
+        if (diff <= 0) {
+          // Match is LIVE
+          if (!statusText.classList.contains('is-live')) {
+            statusText.innerHTML = `<span class="flex items-center gap-1.5 text-red-500"><span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>LIVE</span>`;
+            statusText.classList.add('is-live');
+            statusText.classList.remove('theme-text-secondary');
+            statusText.parentElement.parentElement.parentElement.classList.add('border-red-500/30');
+          }
+        } else {
+          // Match is Upcoming - Show Countdown
+          const hours = Math.floor(diff / (1000 * 60 * 60));
+          const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+          const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+          let countdownStr = '';
+          if (hours > 0) countdownStr += `${hours}h `;
+          countdownStr += `${minutes}m ${seconds}s`;
+          
+          statusText.innerHTML = `<span class="text-brand font-bold">Starts in: ${countdownStr}</span>`;
+        }
+      });
+    }
+
+    // Initial call and set interval
+    updateMatchStatuses();
+    setInterval(updateMatchStatuses, 1000);
+  </script>
+</Layout>
+
+<style>
+  /* Custom scrollbar hiding helper */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>

@@ -1,0 +1,18 @@
+name = "methstream-online"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+main = "./dist/_worker.js/index.js"
+workers_dev = true
+
+routes = [
+  { pattern = "methstream.online/*", zone_name = "methstream.online" },
+  { pattern = "www.methstream.online/*", zone_name = "methstream.online" }
+]
+
+[assets]
+directory = "./dist"
+
+[vars]
+SITE_NAME = "Methstreams"
+PUBLIC_SITE_NAME = "Methstreams"
+PUBLIC_BASE_URL = "https://methstream.online"

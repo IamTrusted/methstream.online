@@ -1,0 +1,187 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand: #3b82f6;
+}
+
+:root {
+  --bg-color: #080c14;
+  --card-bg: #0f172a;
+  --card-hover: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --nav-bg: rgba(13, 18, 30, 0.85);
+  --border-color: rgba(59, 130, 246, 0.18);
+  --accent-color: #3b82f6;
+  --glow-color: rgba(59, 130, 246, 0.35);
+}
+
+:root.light {
+  --bg-color: #f0f7ff;
+  --card-bg: #ffffff;
+  --card-hover: #e0f2fe;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --border-color: rgba(59, 130, 246, 0.2);
+  --accent-color: #2563eb;
+  --glow-color: rgba(59, 130, 246, 0.2);
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.theme-card {
+  background-color: var(--card-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  border-radius: 16px;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+}
+
+.theme-card-hover:hover {
+  background-color: var(--card-hover);
+  box-shadow: 0 0 25px var(--glow-color);
+  transform: translateY(-2px);
+}
+
+.theme-text-primary {
+  color: var(--text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--text-secondary);
+}
+
+.theme-nav {
+  background-color: var(--nav-bg);
+  border-color: var(--border-color);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 0 1px 20px rgba(59, 130, 246, 0.1);
+}
+
+.light .prose {
+  --tw-prose-body: #374151;
+  --tw-prose-headings: #111827;
+  --tw-prose-links: #2563eb;
+  --tw-prose-bold: #111827;
+  --tw-prose-bullets: #4b5563;
+  --tw-prose-quotes: #111827;
+  --tw-prose-code: #111827;
+  --tw-prose-hr: #e5e7eb;
+  --tw-prose-th-borders: #d1d5db;
+}
+
+.prose {
+  --tw-prose-body: #cbd5e1;
+  --tw-prose-headings: #ffffff;
+  --tw-prose-links: #3b82f6;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-bullets: #64748b;
+  --tw-prose-quotes: #ffffff;
+  --tw-prose-code: #ffffff;
+  --tw-prose-hr: rgba(59, 130, 246, 0.18);
+  --tw-prose-th-borders: rgba(59, 130, 246, 0.25);
+}
+
+strong {
+  @apply text-brand
+}
+/* ═══ Mobile-First Enhancements ═══════════════════════════ */
+
+/* Minimum touch target: 44x44px (Apple HIG / Google standard) */
+a, button, [role="button"] {
+  min-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better text readability on mobile */
+body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px; /* Prevent iOS zoom on input focus */
+  line-height: 1.6;
+}
+
+/* Prevent horizontal overflow on small screens */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Input fix: prevent iOS zoom (must be >= 16px) */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* Smooth scrolling with momentum on iOS */
+.overflow-x-auto, .no-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Better tap highlight for sport cards */
+.sport-card {
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+/* Match cards: better mobile touch */
+.match-card-premium {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Larger base padding on mobile */
+@media (max-width: 639px) {
+  .sport-card {
+    border-radius: 14px;
+    padding: 8px 4px;
+    min-height: 72px;
+  }
+  .sport-label {
+    font-size: 7.5px !important;
+    margin-top: 4px;
+  }
+  .sport-icon {
+    font-size: 1.7rem !important;
+  }
+  .match-card-premium {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+  .mc-badge-wrap {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .mc-badge-img {
+    width: 24px !important;
+    height: 24px !important;
+  }
+  .mc-team-name {
+    font-size: 10px !important;
+  }
+  .mc-vs-wrap {
+    width: 28px !important;
+    height: 28px !important;
+  }
+  .mc-watch-btn {
+    font-size: 7px !important;
+    padding: 3px 8px !important;
+  }
+}
+
+/* Prevent sport grid overflow on small screens */
+@media (max-width: 400px) {
+  .sport-card {
+    min-height: 65px;
+    border-radius: 12px;
+  }
+}

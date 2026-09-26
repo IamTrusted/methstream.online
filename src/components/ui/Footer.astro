@@ -1,0 +1,29 @@
+---
+// Footer.astro
+const SITE_NAME = import.meta.env.PUBLIC_SITE_NAME || "Methstreams";
+---
+
+<footer class="theme-nav border-t border-[var(--border-color)] mt-20 shadow-2xl relative overflow-hidden">
+  <div class="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent"></div>
+  <div
+    class="max-w-7xl mx-auto px-4 py-10 flex flex-col md:flex-row justify-between items-center gap-6"
+  >
+    <!-- SITE INFO -->
+    <div class="text-center md:text-left">
+      <h2 class="text-xl font-black bg-gradient-to-r from-blue-400 to-sky-300 bg-clip-text text-transparent tracking-wide">
+        {SITE_NAME}
+      </h2>
+      <p class="theme-text-secondary text-xs sm:text-sm mt-1">
+        © 2026 {SITE_NAME}. All rights reserved. The premier source for free HD live sports streams.
+      </p>
+    </div>
+
+    <!-- QUICK LINKS -->
+    <nav class="flex flex-wrap justify-center gap-5 text-xs sm:text-sm theme-text-secondary">
+      <a href="/" class="hover:text-blue-400 transition duration-200">Home</a>
+      <a href="/contact-us/" class="hover:text-blue-400 transition duration-200">Contact Us</a>
+      <a href="/privacy-policy/" class="hover:text-blue-400 transition duration-200">Privacy Policy</a>
+      <a href="/dmca/" class="hover:text-blue-400 transition duration-200">DMCA</a>
+    </nav>
+  </div>
+</footer>
