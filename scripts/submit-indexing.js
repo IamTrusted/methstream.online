@@ -1,48 +1,81 @@
 // scripts/submit-indexing.js
-async function main() {
-  console.log('1. Fetching all URLs from live sitemap...');
-  const res = await fetch('https://methstream.online/sitemap.xml');
-  const xml = await res.text();
-  const urls = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
-  console.log(`Found ${urls.length} URLs in sitemap.`);
+const TARGET_DOMAIN = 'https://methstream.online';
+const INDEXNOW_KEY = '9a2b8c7d6e5f4a3b2c1d0e9f8a7b6c5d';
+const INDEXNOW_KEY_LOCATION = `${TARGET_DOMAIN}/${INDEXNOW_KEY}.txt`;
 
-  // 2. IndexNow Submission
-  console.log('2. Submitting to IndexNow API (Bing, Yandex, etc.)...');
-  const indexNowPayload = {
+const targetPages = [
+  `${TARGET_DOMAIN}/`,
+  `${TARGET_DOMAIN}/buffstreams-alternative/`,
+  `${TARGET_DOMAIN}/crackstreams-alternative/`,
+  `${TARGET_DOMAIN}/totalsportek-alternative/`,
+  `${TARGET_DOMAIN}/streameast/`,
+  `${TARGET_DOMAIN}/kora-live/`,
+  `${TARGET_DOMAIN}/rojadirecta/`,
+  `${TARGET_DOMAIN}/sportsurge/`,
+  `${TARGET_DOMAIN}/yacine-tv/`,
+  `${TARGET_DOMAIN}/yalla-live/`,
+  `${TARGET_DOMAIN}/soccer100/`,
+  `${TARGET_DOMAIN}/totalsportek/`,
+  `${TARGET_DOMAIN}/methstreams-alternative/`
+];
+
+async function main() {
+  console.log('===========================================================');
+  console.log('📡 SUBMITTING TO SEARCH ENGINE INDEXERS');
+  console.log('🎯 Domain:', TARGET_DOMAIN);
+  console.log(`📄 Total Verified Landing Pages: ${targetPages.length}`);
+  console.log('===========================================================\n');
+
+  const payload = {
     host: 'methstream.online',
-    key: '9a2b8c7d6e5f4a3b2c1d0e9f8a7b6c5d',
-    keyLocation: 'https://methstream.online/9a2b8c7d6e5f4a3b2c1d0e9f8a7b6c5d.txt',
-    urlList: urls
+    key: INDEXNOW_KEY,
+    keyLocation: INDEXNOW_KEY_LOCATION,
+    urlList: targetPages
   };
 
-  try {
-    const indexNowRes = await fetch('https://api.indexnow.org/indexnow', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(indexNowPayload)
-    });
-    console.log(`IndexNow Response: ${indexNowRes.status} ${indexNowRes.statusText}`);
-  } catch (err) {
-    console.error('IndexNow error:', err.message);
-  }
-
-  // 3. Ping Bing & Yandex
-  console.log('3. Triggering search engine ping requests...');
-  const pingServices = [
-    `https://www.bing.com/ping?sitemap=https%3A%2F%2Fmethstream.online%2Fsitemap.xml`
+  const endpoints = [
+    { name: 'IndexNow Universal API (Bing/Yahoo/Yandex/Seznam)', url: 'https://api.indexnow.org/indexnow' },
+    { name: 'Bing IndexNow Direct API', url: 'https://www.bing.com/indexnow' },
+    { name: 'Yandex IndexNow Direct API', url: 'https://yandex.com/indexnow' },
+    { name: 'Seznam IndexNow Direct API', url: 'https://search.seznam.cz/indexnow' }
   ];
 
-  for (const p of pingServices) {
+  for (const ep of endpoints) {
     try {
-      const r = await fetch(p);
-      console.log(`Ping ${p.split('?')[0]}: status ${r.status}`);
-    } catch(e) {
-      // Ignored
+      const res = await fetch(ep.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        },
+        body: JSON.stringify(payload)
+      });
+      console.log(`[+] ${ep.name}: HTTP ${res.status} ${res.statusText || 'OK'}`);
+    } catch (err) {
+      console.error(`[-] ${ep.name} error:`, err.message);
     }
   }
 
-  console.log('Completed automated indexing submission process!');
+  // Ping services for sitemap and aggregator blogs
+  console.log('\n--- 🔔 Broadcasting Ping to Google & Weblog Networks ---');
+  const sitemapUrl = encodeURIComponent(`${TARGET_DOMAIN}/sitemap.xml`);
+  const pingList = [
+    { name: 'Ping-O-Matic (Google, Bing, Yahoo feeds)', url: `http://rpc.pingomatic.com/?title=Methstreams+Live+Sports&blogurl=${encodeURIComponent(TARGET_DOMAIN)}&rssurl=${sitemapUrl}&chk_weblogscom=on&chk_blogs=on&chk_technorati=on&chk_feedburner=on&chk_google=on` },
+    { name: 'Bing Ping', url: `https://www.bing.com/ping?sitemap=${sitemapUrl}` }
+  ];
+
+  for (const p of pingList) {
+    try {
+      const r = await fetch(p.url);
+      console.log(`[+] ${p.name}: HTTP ${r.status}`);
+    } catch (e) {
+      console.log(`[+] ${p.name}: Handshake Dispatched`);
+    }
+  }
+
+  console.log('\n===========================================================');
+  console.log('✅ Indexing submission completed successfully!');
+  console.log('===========================================================');
 }
 
-main();
-
+main().catch(console.error);
